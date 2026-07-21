@@ -290,8 +290,11 @@ def process_live(interface: str,
         remaining = manager.flush_all()
         for flow in remaining:
             flow_num += 1
-            handle_completed_flow(flow, csv_writer, predictor_instance, flow_num)
-        
+            try:
+                handle_completed_flow(flow, csv_writer, predictor_instance, flow_num)
+            except KeyboardInterrupt:
+                print("\nFlush interrupted.")
+                break
         # Close CSV
         if csv_writer is not None:
             csv_writer.close()
