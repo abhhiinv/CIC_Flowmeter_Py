@@ -28,14 +28,14 @@ class CSVWriter:
     2. Batch: collect all flow dicts and write at once using pandas
     """
     
-    def __init__(self, output_path: str, mode: str = "streaming") -> None:
+    def __init__(self, output_path: str, mode: str = "streaming" , flush_every=1) -> None:
         self.output_path = output_path
         self.mode = mode
         self._file = None
         self._writer = None
         self._row_count = 0
         self._header_written = False
-        
+        self._flush_every = flush_every
         # For batch mode
         self._batch_rows: List[Dict[str, Any]] = []
     
@@ -68,7 +68,7 @@ class CSVWriter:
             self._row_count += 1
             
             # Periodic flush for large files
-            if self._row_count % 1000 == 0:
+            if self._row_count % self._flush_every == 0:
                 self._file.flush()
         else:
             # Batch mode: collect for later
