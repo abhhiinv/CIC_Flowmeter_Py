@@ -7,6 +7,7 @@ Performs inference only - never trains or modifies models.
 """
 
 import logging
+import warnings
 import numpy as np
 import pandas as pd
 import joblib
@@ -14,6 +15,13 @@ from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 
 from .config import MODEL_PATH, SCALER_PATH, LABEL_ENCODER_PATH, MODEL_FEATURE_COLUMNS
+
+# Suppress sklearn's joblib thread-context warning that appears during live capture
+warnings.filterwarnings(
+    'ignore',
+    message=".*sklearn.utils.parallel.delayed.*",
+    category=UserWarning
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +67,35 @@ class Predictor:
             self.feature_columns = self.scaler.feature_names_in_.tolist()
             logger.info(f"Using {len(self.feature_columns)} features from scaler")
         
+        # Force single-threaded execution on all sub-estimators.
+        # The VotingClassifier wraps RandomForest/XGBoost which default to
+        # n_jobs=-1 (all cores). In live capture, joblib spawns worker
+        # processes that lose sklearn's thread-local config, causing the
+        # UserWarning and eventual hang. Setting n_jobs=1 avoids this.
+        self._force_single_threaded()
+        
         self._loaded = True
         logger.info("Prediction pipeline ready.")
+    
+    def _force_single_threaded(self) -> None:
+        """Set n_jobs=1 on the top-level model and all nested estimators.
+        
+        This prevents joblib from spawning worker processes during prediction,
+        which causes threading issues in the live capture pipeline.
+        """
+        def _set_njobs(estimator) -> None:
+            if hasattr(estimator, 'n_jobs'):
+                estimator.n_jobs = 1
+            # Recurse into VotingClassifier / Pipeline sub-estimators
+            if hasattr(estimator, 'estimators_'):
+                for est in estimator.estimators_:
+                    _set_njobs(est)
+            if hasattr(estimator, 'estimators'):  # unfitted list
+                for _, est in estimator.estimators:
+                    _set_njobs(est)
+        
+        _set_njobs(self.model)
+        logger.info("Set n_jobs=1 on all sub-estimators for thread-safe prediction.")
     
     def _preprocess(self, features: Dict[str, Any]) -> np.ndarray:
         """Preprocess a single feature dict for prediction.

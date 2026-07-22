@@ -49,5 +49,5 @@ MODEL_FEATURE_COLUMNS = [
     "Init_Win_bytes_forward", "Init_Win_bytes_backward",
     "act_data_pkt_fwd", "min_seg_size_forward",
     "Active Mean", "Active Max", "Active Min",
-    "Idle Mean", "Idle Max", "Idle Min",
+    "Idle Mean", "Idle Max", "Idle Min"
 ]
