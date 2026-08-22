@@ -24,26 +24,52 @@ ACTIVITY_TIMEOUT = 5_000_000.0  # 5 seconds in microseconds
 
 # Ordered list of output column names - must match exactly
 COLUMN_NAMES = [
-    "Destination Port", "Flow Duration", "Total Fwd Packets",
-    "Total Length of Fwd Packets", "Fwd Packet Length Max",
-    "Fwd Packet Length Min", "Fwd Packet Length Mean", "Fwd Packet Length Std",
-    "Bwd Packet Length Max", "Bwd Packet Length Min",
-    "Bwd Packet Length Mean", "Bwd Packet Length Std",
-    "Flow Bytes/s", "Flow Packets/s",
-    "Flow IAT Mean", "Flow IAT Std", "Flow IAT Max", "Flow IAT Min",
-    "Fwd IAT Total", "Fwd IAT Mean", "Fwd IAT Std", "Fwd IAT Max", "Fwd IAT Min",
-    "Bwd IAT Total", "Bwd IAT Mean", "Bwd IAT Std", "Bwd IAT Max", "Bwd IAT Min",
-    "Fwd Header Length", "Bwd Header Length",
-    "Fwd Packets/s", "Bwd Packets/s",
-    "Min Packet Length", "Max Packet Length",
-    "Packet Length Mean", "Packet Length Std", "Packet Length Variance",
-    "FIN Flag Count", "PSH Flag Count", "ACK Flag Count",
-    "Average Packet Size",
-    "Subflow Fwd Bytes",
-    "Init_Win_bytes_forward", "Init_Win_bytes_backward",
-    "act_data_pkt_fwd", "min_seg_size_forward",
-    "Active Mean", "Active Max", "Active Min",
-    "Idle Mean", "Idle Max", "Idle Min",
+    "Destination Port",
+    "Flow Duration",
+    "Total Fwd Packets",
+    "Total Backward Packets",
+    "Total Length of Fwd Packets",
+    "Total Length of Bwd Packets",
+    "Fwd Packet Length Max",
+    "Fwd Packet Length Min",
+    "Fwd Packet Length Mean",
+    "Fwd Packet Length Std",
+    "Bwd Packet Length Max",
+    "Bwd Packet Length Min",
+    "Bwd Packet Length Mean",
+    "Bwd Packet Length Std",
+    "Flow Bytes/s",
+    "Flow Packets/s",
+    "Flow IAT Mean",
+    "Flow IAT Std",
+    "Flow IAT Max",
+    "Flow IAT Min",
+    "Fwd IAT Mean",
+    "Fwd IAT Std",
+    "Fwd IAT Min",
+    "Bwd IAT Total",
+    "Bwd IAT Mean",
+    "Bwd IAT Max",
+    "Bwd IAT Min",
+    "Fwd Header Length",
+    "Bwd Header Length",
+    "Bwd Packets/s",
+    "Min Packet Length",
+    "Max Packet Length",
+    "Packet Length Mean",
+    "Packet Length Std",
+    "Packet Length Variance",
+    "FIN Flag Count",
+    "PSH Flag Count",
+    "ACK Flag Count",
+    "Init_Win_bytes_forward",
+    "Init_Win_bytes_backward",
+    "act_data_pkt_fwd",
+    "min_seg_size_forward",
+    "Active Mean",
+    "Active Max",
+    "Active Min",
+    "Idle Mean",
     "Attack Type"
 ]
 
@@ -233,8 +259,6 @@ class Flow:
         # CICFlowMeter: act_data_pkt_fwd = forward packets that carry payload
         act_data_pkt_fwd = sum(1 for p in self.fwd_packets if p.payload_length > 0)
         
-        # -- Subflow Fwd Bytes = total forward payload bytes --
-        subflow_fwd_bytes = sum(p.payload_length for p in self.fwd_packets)
         
         # -- min_seg_size_forward: minimum TCP segment size in forward direction --
         fwd_seg_sizes = [p.segment_size for p in self.fwd_packets
@@ -264,8 +288,14 @@ class Flow:
             # Total Forward Packets
             "Total Fwd Packets": total_fwd_packets,
             
-            # Total Length of Forward Packets (total bytes of all fwd packets)
+            # Total Backward Packets
+            "Total Backward Packets": total_bwd_packets,
+            
+            # Total Length of Forward Packets
             "Total Length of Fwd Packets": total_fwd_bytes,
+            
+            # Total Length of Backward Packets
+            "Total Length of Bwd Packets": total_bwd_bytes,
             
             # Forward Packet Length statistics
             "Fwd Packet Length Max": safe_max(fwd_lengths),
@@ -280,7 +310,7 @@ class Flow:
             "Bwd Packet Length Std": safe_stdev(bwd_lengths),
             
             # Flow Bytes/s = total bytes / duration in seconds
-            "Flow Bytes/s": safe_div(total_bytes, duration_s),
+            "Flow Bytes/s": 0 if duration_s == 0 else total_bytes / duration_s,
             
             # Flow Packets/s = total packets / duration in seconds
             "Flow Packets/s": safe_div(total_packets, duration_s),
@@ -292,10 +322,8 @@ class Flow:
             "Flow IAT Min": safe_min(flow_iats),
             
             # Forward IAT statistics (microseconds)
-            "Fwd IAT Total": safe_sum(fwd_iats),
             "Fwd IAT Mean": safe_mean(fwd_iats),
             "Fwd IAT Std": safe_stdev(fwd_iats),
-            "Fwd IAT Max": safe_max(fwd_iats),
             "Fwd IAT Min": safe_min(fwd_iats),
             
             # Backward IAT statistics (microseconds)
@@ -310,7 +338,6 @@ class Flow:
             "Bwd Header Length": bwd_header_length,
             
             # Directional packet rates
-            "Fwd Packets/s": safe_div(total_fwd_packets, duration_s),
             "Bwd Packets/s": safe_div(total_bwd_packets, duration_s),
             
             # Overall Packet Length statistics
@@ -324,12 +351,6 @@ class Flow:
             "FIN Flag Count": fin_count,
             "PSH Flag Count": psh_count,
             "ACK Flag Count": ack_count,
-            
-            # Average Packet Size = total_bytes / total_packets
-            "Average Packet Size": safe_div(total_bytes, total_packets),
-            
-            # Subflow Fwd Bytes = forward payload bytes
-            "Subflow Fwd Bytes": subflow_fwd_bytes,
             
             # Initial TCP window sizes
             "Init_Win_bytes_forward": init_win_fwd,
@@ -348,8 +369,6 @@ class Flow:
             
             # Idle time statistics (microseconds)
             "Idle Mean": safe_mean(idle_times),
-            "Idle Max": safe_max(idle_times),
-            "Idle Min": safe_min(idle_times),
             
             # Attack Type label (default: Benign)
             "Attack Type": self.label

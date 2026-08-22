@@ -2,5 +2,6 @@ models/
 columns.txt
 full_implementation.md
 prompt.md
+cicflowmeter_changes.md
 __pycache__/
-live.csv
+*.csv

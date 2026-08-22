@@ -23,7 +23,7 @@ All three files must be serialized with `joblib`. Loading is handled by `cicflow
 
 - Must expose a `predict(X)` method compatible with the scikit-learn API
 - Must expose a `predict_proba(X)` method for confidence scores (strongly recommended; confidence output is disabled if absent)
-- Input `X` is a 2D numpy array of shape `(n_samples, 52)` — already scaled by the scaler
+- Input `X` is a 2D numpy array of shape `(n_samples, 46)` — already scaled by the scaler
 - Output of `predict()` must be an array of integer-encoded class labels matching the label encoder's encoding
 - The reference implementation uses a `VotingClassifier` (soft voting) over Random Forest and XGBoost base learners, trained on CIC-IDS2017
 
@@ -32,7 +32,7 @@ All three files must be serialized with `joblib`. Loading is handled by `cicflow
 ## Scaler (`scaler.pkl`)
 
 - Must be a fitted `StandardScaler` (or any scikit-learn transformer exposing `transform(X)`)
-- Must have been fit on exactly the 52 features listed below, **in this exact order**
+- Must have been fit on exactly the 46 features listed below, **in this exact order**
 - If the scaler has a `feature_names_in_` attribute (set automatically when fit on a named DataFrame), the pipeline will use it to verify column order — this is the recommended approach
 
 ---
@@ -59,64 +59,57 @@ You can use a different set of classes as long as the encoder and model are cons
 
 ## Feature Contract
 
-The scaler and model must be trained on exactly these 52 features, in this order:
+The scaler and model must be trained on exactly these 46 features, in this order:
 
 | # | Feature Name |
 |---|---|
 | 1 | Destination Port |
 | 2 | Flow Duration |
 | 3 | Total Fwd Packets |
-| 4 | Total Length of Fwd Packets |
-| 5 | Fwd Packet Length Max |
-| 6 | Fwd Packet Length Min |
-| 7 | Fwd Packet Length Mean |
-| 8 | Fwd Packet Length Std |
-| 9 | Bwd Packet Length Max |
-| 10 | Bwd Packet Length Min |
-| 11 | Bwd Packet Length Mean |
-| 12 | Bwd Packet Length Std |
-| 13 | Flow Bytes/s |
-| 14 | Flow Packets/s |
-| 15 | Flow IAT Mean |
-| 16 | Flow IAT Std |
-| 17 | Flow IAT Max |
-| 18 | Flow IAT Min |
-| 19 | Fwd IAT Total |
-| 20 | Fwd IAT Mean |
-| 21 | Fwd IAT Std |
-| 22 | Fwd IAT Max |
+| 4 | Total Backward Packets |
+| 5 | Total Length of Fwd Packets |
+| 6 | Total Length of Bwd Packets |
+| 7 | Fwd Packet Length Max |
+| 8 | Fwd Packet Length Min |
+| 9 | Fwd Packet Length Mean |
+| 10 | Fwd Packet Length Std |
+| 11 | Bwd Packet Length Max |
+| 12 | Bwd Packet Length Min |
+| 13 | Bwd Packet Length Mean |
+| 14 | Bwd Packet Length Std |
+| 15 | Flow Bytes/s |
+| 16 | Flow Packets/s |
+| 17 | Flow IAT Mean |
+| 18 | Flow IAT Std |
+| 19 | Flow IAT Max |
+| 20 | Flow IAT Min |
+| 21 | Fwd IAT Mean |
+| 22 | Fwd IAT Std |
 | 23 | Fwd IAT Min |
 | 24 | Bwd IAT Total |
 | 25 | Bwd IAT Mean |
-| 26 | Bwd IAT Std |
-| 27 | Bwd IAT Max |
-| 28 | Bwd IAT Min |
-| 29 | Fwd Header Length |
-| 30 | Bwd Header Length |
-| 31 | Fwd Packets/s |
-| 32 | Bwd Packets/s |
-| 33 | Min Packet Length |
-| 34 | Max Packet Length |
-| 35 | Packet Length Mean |
-| 36 | Packet Length Std |
-| 37 | Packet Length Variance |
-| 38 | FIN Flag Count |
-| 39 | PSH Flag Count |
-| 40 | ACK Flag Count |
-| 41 | Average Packet Size |
-| 42 | Subflow Fwd Bytes |
-| 43 | Init_Win_bytes_forward |
-| 44 | Init_Win_bytes_backward |
-| 45 | act_data_pkt_fwd |
-| 46 | min_seg_size_forward |
-| 47 | Active Mean |
-| 48 | Active Max |
-| 49 | Active Min |
-| 50 | Idle Mean |
-| 51 | Idle Max |
-| 52 | Idle Min |
+| 26 | Bwd IAT Max |
+| 27 | Bwd IAT Min |
+| 28 | Fwd Header Length |
+| 29 | Bwd Header Length |
+| 30 | Bwd Packets/s |
+| 31 | Min Packet Length |
+| 32 | Max Packet Length |
+| 33 | Packet Length Mean |
+| 34 | Packet Length Std |
+| 35 | Packet Length Variance |
+| 36 | FIN Flag Count |
+| 37 | PSH Flag Count |
+| 38 | ACK Flag Count |
+| 39 | Init_Win_bytes_forward |
+| 40 | Init_Win_bytes_backward |
+| 41 | act_data_pkt_fwd |
+| 42 | min_seg_size_forward |
+| 43 | Active Mean |
+| 44 | Active Max |
+| 45 | Active Min |
+| 46 | Idle Mean |
 
-> **Note:** Features 47–52 (Active/Idle statistics) are currently set to `0` by the flow extractor, as computing them requires activity-window tracking not yet implemented. Your model should be trained with these columns present but treated as always-zero during live inference.
 
 ---
 
@@ -130,7 +123,7 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 
-# Assume X_train (DataFrame with the 52 columns above) and y_train are ready
+# Assume X_train (DataFrame with the 46 columns above) and y_train are ready
 
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X_train)

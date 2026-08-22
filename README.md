@@ -6,10 +6,10 @@ A Python implementation of CICFlowMeter that extracts network flow features from
 
 ## Features
 
-- **CICFlowMeter-compatible output** — generates exactly 52 numeric features + attack label per flow
+- **CICFlowMeter-compatible output** — generates exactly 46 numeric features + attack label per flow
 - **Offline PCAP processing** — convert `.pcap` / `.pcapng` files to feature CSVs
 - **Live packet capture** — sniff traffic from any network interface in real time
-- **ML prediction** — classify each flow as Benign or one of 6 attack categories
+- **ML prediction** — classify each flow as Normal Traffic or one of 4 attack categories
 - **Streaming architecture** — constant memory, writes flows to CSV as they complete
 - **Multiprocessing** — parallel chunk processing for multi-GB PCAPs
 - **Directory batch mode** — process entire folders of PCAPs at once
@@ -61,8 +61,8 @@ cicClone/
 │   └── stats_utils.py             # Statistics helper functions
 ├── models/                        # Pre-trained ML artifacts
 │   ├── ensemble_model.pkl         # VotingClassifier model
-│   ├── scaler.pkl                 # StandardScaler (52 features)
-│   └── label_encoder.pkl          # LabelEncoder (7 classes)
+│   ├── scaler.pkl                 # StandardScaler (46 features)
+│   └── label_encoder.pkl          # LabelEncoder (5 classes)
 ├── cicflowmeter_converter.py      # Standalone PCAP-to-CSV converter
 ├── validate.py                    # Feature validation script
 └── converter.py                   # Original baseline tool
@@ -179,7 +179,7 @@ Confidence:
 Top probabilities:
   Normal Traffic: 92.50%
   DoS: 6.25%
-  Port Scanning: 0.75%
+  Port Scan: 0.75%
 --------------------------------------------------
 ```
 
@@ -227,7 +227,7 @@ python cicflowmeter_converter.py input.pcap output.csv --timeout 60 --label "DDo
 
 ## Validation
 
-Run the validation script to verify that all 53 columns are generated correctly:
+Run the validation script to verify that all 47 columns are generated correctly:
 
 ```bash
 # With a PCAP file
@@ -238,9 +238,9 @@ python validate.py
 ```
 
 The script checks:
-1. All 53 columns are present
-2. Column order matches CICFlowMeter exactly
-3. All 52 numeric columns contain valid numbers
+1. All 47 columns are present
+2. Column order matches the training feature set exactly
+3. All 46 numeric columns contain valid numbers
 4. No NaN or None values exist
 5. Prints every feature value for inspection
 
@@ -248,51 +248,50 @@ The script checks:
 
 ## Output Format
 
-The CSV contains **53 columns** matching CICFlowMeter output:
+The CSV contains **47 columns** (46 numeric features + label):
 
 | # | Column | Description |
 |---|---|---|
 | 1 | `Destination Port` | Destination port number |
 | 2 | `Flow Duration` | Duration in microseconds |
 | 3 | `Total Fwd Packets` | Forward packet count |
-| 4 | `Total Length of Fwd Packets` | Total bytes in forward direction |
-| 5–8 | `Fwd Packet Length Max/Min/Mean/Std` | Forward packet size statistics |
-| 9–12 | `Bwd Packet Length Max/Min/Mean/Std` | Backward packet size statistics |
-| 13 | `Flow Bytes/s` | Flow byte rate |
-| 14 | `Flow Packets/s` | Flow packet rate |
-| 15–18 | `Flow IAT Mean/Std/Max/Min` | Flow inter-arrival time statistics |
-| 19–23 | `Fwd IAT Total/Mean/Std/Max/Min` | Forward IAT statistics |
-| 24–28 | `Bwd IAT Total/Mean/Std/Max/Min` | Backward IAT statistics |
-| 29–30 | `Fwd/Bwd Header Length` | Sum of IP+transport headers |
-| 31–32 | `Fwd/Bwd Packets/s` | Directional packet rates |
-| 33–37 | `Packet Length Min/Max/Mean/Std/Variance` | Overall packet size statistics |
-| 38–40 | `FIN/PSH/ACK Flag Count` | TCP flag counts |
-| 41 | `Average Packet Size` | Total bytes / total packets |
-| 42 | `Subflow Fwd Bytes` | Forward payload bytes |
-| 43–44 | `Init_Win_bytes_forward/backward` | Initial TCP window sizes |
-| 45 | `act_data_pkt_fwd` | Forward packets with payload |
-| 46 | `min_seg_size_forward` | Minimum forward segment size |
-| 47–49 | `Active Mean/Max/Min` | Active period statistics |
-| 50–52 | `Idle Mean/Max/Min` | Idle period statistics |
-| 53 | `Attack Type` | Classification label |
+| 4 | `Total Backward Packets` | Backward packet count |
+| 5 | `Total Length of Fwd Packets` | Total bytes in forward direction |
+| 6 | `Total Length of Bwd Packets` | Total bytes in backward direction |
+| 7–10 | `Fwd Packet Length Max/Min/Mean/Std` | Forward packet size statistics |
+| 11–14 | `Bwd Packet Length Max/Min/Mean/Std` | Backward packet size statistics |
+| 15 | `Flow Bytes/s` | Flow byte rate |
+| 16 | `Flow Packets/s` | Flow packet rate |
+| 17–20 | `Flow IAT Mean/Std/Max/Min` | Flow inter-arrival time statistics |
+| 21–23 | `Fwd IAT Mean/Std/Min` | Forward IAT statistics |
+| 24–27 | `Bwd IAT Total/Mean/Max/Min` | Backward IAT statistics |
+| 28–29 | `Fwd/Bwd Header Length` | Sum of IP+transport headers |
+| 30 | `Bwd Packets/s` | Backward packet rate |
+| 31–35 | `Min/Max Packet Length, Mean/Std/Variance` | Overall packet size statistics |
+| 36–38 | `FIN/PSH/ACK Flag Count` | TCP flag counts |
+| 39–40 | `Init_Win_bytes_forward/backward` | Initial TCP window sizes |
+| 41 | `act_data_pkt_fwd` | Forward packets with payload |
+| 42 | `min_seg_size_forward` | Minimum forward segment size |
+| 43–45 | `Active Mean/Max/Min` | Active period statistics |
+| 46 | `Idle Mean` | Idle period mean |
+| 47 | `Attack Type` | Classification label |
 
 ---
 
 ## ML Model
 
-The pre-trained model classifies flows into **7 categories**:
+The pre-trained model classifies flows into **5 categories**:
 
 | Class | Description |
 |---|---|
 | Normal Traffic | Benign network activity |
-| DDoS | Distributed Denial of Service |
 | DoS | Denial of Service |
+| DDoS | Distributed Denial of Service |
 | Brute Force | Login brute force attempts |
-| Port Scanning | Network reconnaissance |
-| Web Attacks | HTTP-based attacks |
-| Bots | Botnet traffic |
+| Port Scan | Network reconnaissance |
 
-- **Model type:** VotingClassifier (ensemble)
+- **Model type:** VotingClassifier (RF + XGBoost ensemble)
+- **Training dataset:** CICIDS2017 (preprocessed, 2.5M flows)
 - **Confidence scores:** Available via `predict_proba()`
 - **Top-3 probabilities** are displayed for each prediction
 
@@ -303,8 +302,8 @@ The pre-trained model classifies flows into **7 categories**:
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      main.py (CLI)                      │
+┌──────────────────────────────────────────────────────────┐
+│                      main.py (CLI)                       │
 ├──────────────┬──────────────────┬────────────────────────┤
 │  Offline     │    Live Capture  │     Prediction         │
 │  PCAP Mode   │    Mode          │     Pipeline           │
@@ -351,7 +350,7 @@ Run `python main.py --list-interfaces` to see available interface names. Use the
 
 ### Model loading is slow
 
-The ensemble model (~150 MB) takes a few seconds to load. This is a one-time cost at startup.
+The ensemble model takes a few seconds to load. This is a one-time cost at startup.
 
 ---
 
