@@ -127,7 +127,7 @@ class Predictor:
         df = df.replace([np.inf, -np.inf], 0)
         
         # Scale features
-        scaled = self.scaler.transform(df)
+        scaled = self.scaler.transform(df.values)
         
         return scaled
     
@@ -205,7 +205,7 @@ class Predictor:
         df = df.replace([np.inf, -np.inf], 0)
         
         # Scale
-        scaled = self.scaler.transform(df)
+        scaled = self.scaler.transform(df.values)
         
         # Predict
         predictions_encoded = self.model.predict(scaled)

@@ -178,7 +178,7 @@ def validate_with_pcap(pcap_file: str) -> str:
     """Run validation using a real PCAP file."""
     output_file = tempfile.mktemp(suffix='_validation.csv')
     
-    manager = FlowManager(timeout=120.0, label="Benign")
+    manager = FlowManager(timeout=120.0, label="Normal Traffic")
     all_features = []
     
     packet_count = 0
@@ -209,7 +209,7 @@ def validate_with_synthetic() -> str:
     output_file = tempfile.mktemp(suffix='_validation.csv')
     
     packets = create_synthetic_packets()
-    manager = FlowManager(timeout=120.0, label="Benign")
+    manager = FlowManager(timeout=120.0, label="Normal Traffic")
     all_features = []
     
     for pkt in packets:

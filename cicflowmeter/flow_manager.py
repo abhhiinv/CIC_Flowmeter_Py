@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """FlowManager - manages active flows, handles timeouts, yields completed flows.
 
-Each flow expires after an inactivity timeout of 120 seconds.
+Each flow expires after an inactivity timeout (default 30 seconds).
 Completed flows are yielded immediately to enable streaming CSV export
 and constant-memory processing.
 """
@@ -15,8 +15,8 @@ from .packet_info import PacketInfo
 
 logger = logging.getLogger(__name__)
 
-# Flow inactivity timeout in seconds (CICFlowMeter default)
-FLOW_TIMEOUT_SECONDS = 120.0
+# Flow inactivity timeout in seconds
+FLOW_TIMEOUT_SECONDS = 30.0
 
 
 class FlowManager:
@@ -30,7 +30,7 @@ class FlowManager:
     """
     
     def __init__(self, timeout: float = FLOW_TIMEOUT_SECONDS,
-                 label: str = "Benign") -> None:
+                 label: str = "Normal Traffic") -> None:
         self.timeout = timeout
         self.label = label
         self.active_flows: Dict[FlowKey, Flow] = {}

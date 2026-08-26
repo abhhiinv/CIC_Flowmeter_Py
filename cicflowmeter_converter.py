@@ -106,7 +106,7 @@ class CICFlowMeterConverter:
     def __init__(self, chunk_size_mb: int = 1024,
                  flow_timeout: float = 120.0,
                  max_workers: int = None,
-                 label: str = "Benign") -> None:
+                 label: str = "Normal Traffic") -> None:
         self.chunk_size_mb = chunk_size_mb
         self.flow_timeout = flow_timeout
         self.max_workers = max_workers or min(multiprocessing.cpu_count(), 4)
@@ -546,8 +546,8 @@ Examples:
                         help='Chunk size in MB for large files (default: 1024)')
     parser.add_argument('--workers', type=int, default=None,
                         help='Number of parallel workers (default: auto)')
-    parser.add_argument('--label', type=str, default='Benign',
-                        help='Attack type label (default: Benign)')
+    parser.add_argument('--label', type=str, default='Normal Traffic',
+                        help='Attack type label (default: Normal Traffic)')
     
     # Preview
     parser.add_argument('--quick-preview', type=int, default=0,

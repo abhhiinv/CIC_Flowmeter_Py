@@ -5,3 +5,5 @@ prompt.md
 cicflowmeter_changes.md
 __pycache__/
 *.csv
+flow_stall*
+PROGRESS*

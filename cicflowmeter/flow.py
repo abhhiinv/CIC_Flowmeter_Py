@@ -92,7 +92,7 @@ class Flow:
     
     def __init__(self, src_ip: str, dst_ip: str,
                  src_port: int, dst_port: int, protocol: str,
-                 label: str = "Benign") -> None:
+                 label: str = "Normal Traffic") -> None:
         self.src_ip = src_ip
         self.dst_ip = dst_ip
         self.src_port = src_port
@@ -370,7 +370,7 @@ class Flow:
             # Idle time statistics (microseconds)
             "Idle Mean": safe_mean(idle_times),
             
-            # Attack Type label (default: Benign)
+            # Attack Type label (default: Normal Traffic)
             "Attack Type": self.label
         }
         

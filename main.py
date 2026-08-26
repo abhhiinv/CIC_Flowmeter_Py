@@ -41,6 +41,7 @@ from cicflowmeter.config import (
 )
 from cicflowmeter.capture import LiveCapture, CAPTURE_DONE, list_interfaces
 from cicflowmeter.predictor import Predictor
+from cicflowmeter.portscan_detector import PortScanDetector
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,10 +55,65 @@ logger = logging.getLogger('main')
 # Shared flow completion handler
 # ======================================================================
 
+def is_internal_traffic(src_ip: str, dst_ip: str) -> bool:
+    """Return True if this flow is local/infrastructure traffic that should be
+    skipped during ML prediction.
+
+    These addresses are never present in CIC-IDS2017 training data, so the
+    model will always produce meaningless (often falsely alarming) predictions
+    for them.
+
+    Filtered prefixes / addresses:
+      - IPv6 link-local source     fe80:: (covers all practical link-local assignments)
+      - IPv6 multicast destination ff00::/8  (ff prefix)
+      - IPv6 loopback              ::1
+      - IPv4 loopback              127.0.0.0/8
+      - IPv4 broadcast             255.255.255.255
+      - IPv4 link-local            169.254.0.0/16
+      - IPv4 multicast             224.0.0.0/4  (first octet 224-239)
+    """
+    src = src_ip.lower()
+    dst = dst_ip.lower()
+
+    # IPv6 link-local source (fe80::...)
+    # Note: fe80::/10 technically covers fe80-febf, but all real OS assignments
+    # use fe80:: so this prefix check is sufficient in practice.
+    if src.startswith("fe80:"):
+        return True
+    # IPv6 multicast destination (ff01::..., ff02::..., ff0e::..., etc.)
+    if dst.startswith("ff"):
+        return True
+    # IPv6 loopback
+    if src in ("::1", "0:0:0:0:0:0:0:1") or dst in ("::1", "0:0:0:0:0:0:0:1"):
+        return True
+    # IPv4 loopback
+    if src.startswith("127.") or dst.startswith("127."):
+        return True
+    # IPv4 broadcast
+    if dst == "255.255.255.255":
+        return True
+    # IPv4 link-local (APIPA)
+    if src.startswith("169.254.") or dst.startswith("169.254."):
+        return True
+    # IPv4 multicast: 224.0.0.0/4 = first octet 224-239.
+    # Using integer comparison instead of startswith() to correctly cover
+    # the full range (224-239), including 228-238 which were previously missed.
+    dst_parts = dst.split(".")
+    if len(dst_parts) == 4:
+        try:
+            if 224 <= int(dst_parts[0]) <= 239:
+                return True
+        except ValueError:
+            pass
+
+    return False
+
+
 def handle_completed_flow(flow: Flow,
                           csv_writer: Optional[CSVWriter],
                           predictor: Optional[Predictor],
-                          flow_num: int) -> None:
+                          flow_num: int,
+                          portscan_detector: Optional[PortScanDetector] = None) -> None:
     """Process a completed flow: write to CSV and/or run prediction.
     
     This function is called for every flow that finishes (via timeout
@@ -65,40 +121,115 @@ def handle_completed_flow(flow: Flow,
     1. Extracts features
     2. Appends a row to CSV (if csv_writer provided)
     3. Runs ML prediction (if predictor provided)
-    4. Prints results to console
+    4. Overrides prediction with "Port Scan" if cross-flow detector fires
+    5. Prints results to console
     """
     features = flow.get_features()
     
-    # Write to CSV
-    if csv_writer is not None:
-        csv_writer.write_flow(flow)
     
-    # Run prediction
+    # Get readable timestamp from flow start time
+    start_dt = datetime.fromtimestamp(flow.start_time).strftime('%Y-%m-%d %H:%M:%S')
+
+    # --- Cross-flow port scan detector (runs on ALL flows, before any filter) ---
+    # Must run before is_internal_traffic() so that fe80::→fe80:: unicast
+    # link-local port scans are counted and alerted on even though the ML
+    # model never sees link-local traffic.
+    scan_result = None
+    if portscan_detector is not None:
+        is_scan, is_new_episode, unique_ports = portscan_detector.record_and_check(
+            src_ip=flow.src_ip,
+            dst_ip=flow.dst_ip,
+            dst_port=flow.dst_port,
+            flow_end_time=flow.end_time
+        )
+        if is_scan:
+            scan_result = {
+                'label': 'Port Scan',
+                'confidence': None,
+                'probabilities': None,
+                '_scan_unique_ports': unique_ports,
+                '_scan_new_episode': is_new_episode
+            }
+
+    # If a new port scan episode just fired, print the alert regardless of
+    # whether this is internal traffic — IPv6 link-local scans are real attacks.
+    if scan_result is not None and scan_result.get('_scan_new_episode'):
+        output = Predictor.format_prediction(
+            flow.src_ip, flow.src_port,
+            flow.dst_ip, flow.dst_port,
+            scan_result
+        )
+        output += (f"\n  [Port Scan Detector] {scan_result['_scan_unique_ports']} unique "
+                   f"ports contacted by {flow.src_ip} in scan window")
+        print(f"\n{'-' * 50}")
+        print(f"[Flow #{flow_num}] Captured at {start_dt}")
+        print(output)
+        print(f"{'-' * 50}")
+
+    # Skip internal/infrastructure traffic from ML prediction and normal output.
+    # Write to CSV first with final label, then return early.
+    if is_internal_traffic(flow.src_ip, flow.dst_ip):
+        if scan_result is None or not scan_result.get('_scan_new_episode'):
+            logger.debug(f"Flow #{flow_num}: suppressing internal traffic "
+                         f"({flow.src_ip} -> {flow.dst_ip})")
+        if csv_writer is not None:
+            if scan_result is not None:
+                flow.label = scan_result['label']
+            csv_writer.write_flow(flow)
+        return
+
+    # Run ML prediction
     if predictor is not None:
         try:
-            result = predictor.predict(features)
-            output = Predictor.format_prediction(
-                flow.src_ip, flow.src_port,
-                flow.dst_ip, flow.dst_port,
-                result
-            )
-            print(f"\n{'-' * 50}")
-            print(f"[Flow #{flow_num}]")
-            print(output)
-            print(f"{'-' * 50}")
-            
+            # Use the scan override result if detector already fired above,
+            # otherwise get a fresh ML prediction.
+            if scan_result is not None:
+                result = scan_result
+            else:
+                result = predictor.predict(features)
+
+            # Only print the full alert block on the first flow of a new scan
+            # episode. Ongoing-episode flows are logged at DEBUG level.
+            # (New-episode case already printed above before the internal filter.)
+            if result.get('_scan_new_episode'):
+                # Already printed above — just update Attack Type
+                pass
+            elif result.get('label') == 'Port Scan':
+                # Ongoing episode — log quietly so terminal isn't spammed
+                logger.debug(
+                    f"Flow #{flow_num} ({flow.src_ip}:{flow.src_port} -> "
+                    f"{flow.dst_ip}:{flow.dst_port}) labelled Port Scan "
+                    f"(episode ongoing, {result.get('_scan_unique_ports')} unique ports)"
+                )
+            else:
+                output = Predictor.format_prediction(
+                    flow.src_ip, flow.src_port,
+                    flow.dst_ip, flow.dst_port,
+                    result
+                )
+                print(f"\n{'-' * 50}")
+                print(f"[Flow #{flow_num}] Captured at {start_dt}")
+                print(output)
+                print(f"{'-' * 50}")
+
             # Update the Attack Type in features based on prediction
             features['Attack Type'] = result['label']
+            flow.label = result['label']
+            if csv_writer is not None:
+                csv_writer.write_flow(flow)
         except Exception as e:
             logger.error(f"Prediction error for flow #{flow_num}: {e}")
     else:
         # No prediction - just log flow info
+        if csv_writer is not None:
+            csv_writer.write_flow(flow)
         total_pkts = flow._fwd_count + flow._bwd_count
-        print(f"[Flow #{flow_num}] "
+        print(f"[Flow #{flow_num}] {start_dt} | "
               f"{flow.src_ip}:{flow.src_port} -> "
               f"{flow.dst_ip}:{flow.dst_port} | "
               f"{total_pkts} pkts | "
               f"Duration: {features['Flow Duration']} us")
+
 
 
 # ======================================================================
@@ -108,7 +239,7 @@ def handle_completed_flow(flow: Flow,
 def process_pcap(pcap_file: str, output_file: str,
                  predict: bool = False,
                  timeout: float = FLOW_TIMEOUT_SECONDS,
-                 label: str = "Benign") -> None:
+                 label: str = "Normal Traffic") -> None:
     """Process a PCAP file: extract features, write CSV, optionally predict."""
     print(f"\nProcessing PCAP: {pcap_file}")
     print(f"Output CSV: {output_file}")
@@ -199,7 +330,7 @@ def process_live(interface: str,
     print(f"\nPress Ctrl+C to stop capture.\n")
     
     # Initialize components
-    manager = FlowManager(timeout=timeout, label="Benign")
+    manager = FlowManager(timeout=timeout, label="Normal Traffic")
     
     csv_writer = None
     if output_file:
@@ -207,11 +338,18 @@ def process_live(interface: str,
         csv_writer.open()
     
     predictor_instance = None
+    portscan_detector = None
     if predict:
         predictor_instance = Predictor()
         print("Loading ML model...")
         predictor_instance.load()
         print("Model loaded. Starting capture...\n")
+        # Always pair the ML predictor with the port scan detector so that
+        # scan probes that slip past the per-flow model are caught cross-flow.
+        portscan_detector = PortScanDetector()
+        print(f"Port Scan Detector: ENABLED "
+              f"(threshold: {portscan_detector.port_threshold} unique ports "
+              f"/ {portscan_detector.window_seconds:.0f}s window)\n")
     
     # Start live capture
     capture = LiveCapture(
@@ -244,8 +382,11 @@ def process_live(interface: str,
                     for flow in timed_out:
                         flow_num += 1
                         handle_completed_flow(
-                            flow, csv_writer, predictor_instance, flow_num
+                            flow, csv_writer, predictor_instance, flow_num,
+                            portscan_detector
                         )
+                    if portscan_detector is not None:
+                        portscan_detector.evict_stale()
                     last_cleanup = current_time
                 continue
             
@@ -265,7 +406,8 @@ def process_live(interface: str,
             for flow in timed_out_flows:
                 flow_num += 1
                 handle_completed_flow(
-                    flow, csv_writer, predictor_instance, flow_num
+                    flow, csv_writer, predictor_instance, flow_num,
+                    portscan_detector
                 )
             
             # Periodic cleanup of timed-out flows
@@ -275,8 +417,11 @@ def process_live(interface: str,
                 for flow in timed_out:
                     flow_num += 1
                     handle_completed_flow(
-                        flow, csv_writer, predictor_instance, flow_num
+                        flow, csv_writer, predictor_instance, flow_num,
+                        portscan_detector
                     )
+                if portscan_detector is not None:
+                    portscan_detector.evict_stale()
                 last_cleanup = current_time
     
     except KeyboardInterrupt:
@@ -291,7 +436,8 @@ def process_live(interface: str,
         for flow in remaining:
             flow_num += 1
             try:
-                handle_completed_flow(flow, csv_writer, predictor_instance, flow_num)
+                handle_completed_flow(flow, csv_writer, predictor_instance, flow_num,
+                                      portscan_detector)
             except KeyboardInterrupt:
                 print("\nFlush interrupted.")
                 break
@@ -347,9 +493,10 @@ Examples:
                         help='Enable ML prediction on completed flows')
     parser.add_argument('--timeout', type=float, default=FLOW_TIMEOUT_SECONDS,
                         help=f'Flow inactivity timeout in seconds '
-                             f'(default: {FLOW_TIMEOUT_SECONDS})')
-    parser.add_argument('--label', type=str, default='Benign',
-                        help='Default attack type label (default: Benign)')
+                             f'(default: {FLOW_TIMEOUT_SECONDS}; '
+                             f'lower values emit long-lived TCP flows sooner)')
+    parser.add_argument('--label', type=str, default='Normal Traffic',
+                        help='Default attack type label (default: Normal Traffic)')
     
     # Live capture options
     live_group = parser.add_argument_group('Live capture options')

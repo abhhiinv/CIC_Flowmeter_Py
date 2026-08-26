@@ -16,7 +16,7 @@ SCALER_PATH = MODEL_DIR / "scaler.pkl"
 LABEL_ENCODER_PATH = MODEL_DIR / "label_encoder.pkl"
 
 # ── Flow settings ────────────────────────────────────────────────────────
-FLOW_TIMEOUT_SECONDS = 120.0        # Inactivity timeout before flow expires
+FLOW_TIMEOUT_SECONDS = 30.0         # Inactivity timeout before flow expires
 ACTIVITY_TIMEOUT_US = 5_000_000.0   # 5 s in microseconds (active/idle split)
 
 # ── Live capture defaults ────────────────────────────────────────────────
@@ -25,7 +25,7 @@ DEFAULT_PACKET_COUNT = 0            # 0 = unlimited
 DEFAULT_BPF_FILTER = ""             # Empty = capture everything
 
 # ── Performance ──────────────────────────────────────────────────────────
-FLOW_CLEANUP_INTERVAL = 10.0        # Seconds between timeout sweeps in live mode
+FLOW_CLEANUP_INTERVAL = 5.0         # Seconds between timeout sweeps in live mode
 CSV_FLUSH_INTERVAL = 100            # Rows between explicit CSV flushes
 
 # ── Feature columns (46 numeric features – excludes "Attack Type") ──────
