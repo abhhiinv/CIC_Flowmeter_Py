@@ -161,48 +161,53 @@ class Flow:
                 for i in range(len(timestamps) - 1)]
     
     def _compute_active_idle(self) -> tuple:
-        """Compute active and idle periods following CICFlowMeter logic.
-        
-        Active period: consecutive packets with IAT < ACTIVITY_TIMEOUT
-        Idle period: gap between active periods (IAT >= ACTIVITY_TIMEOUT)
-        
+        """Compute active and idle periods following CICFlowMeter Java logic.
+
+        An active burst is a sequence of packets where consecutive IATs are
+        all below ACTIVITY_TIMEOUT. A burst is only *recorded* when it ends
+        (i.e. when an idle gap >= ACTIVITY_TIMEOUT follows it). The trailing
+        burst after the last idle gap is NOT counted — this matches the
+        original Java CICFlowMeter behaviour.
+
         Returns:
             (active_times, idle_times) - lists of durations in microseconds
         """
         all_pkts = sorted(self.fwd_packets + self.bwd_packets,
                           key=lambda p: p.timestamp)
-        
+
         if len(all_pkts) < 2:
             return [], []
-        
+
         active_times: List[float] = []
         idle_times: List[float] = []
-        
+
         # Track start of current active period
         active_start = all_pkts[0].timestamp
         last_ts = all_pkts[0].timestamp
-        
+
         for pkt in all_pkts[1:]:
-            diff = (pkt.timestamp - last_ts) * 1_000_000  # to microseconds
-            
+            diff = (pkt.timestamp - last_ts) * 1_000_000  # microseconds
+
             if diff >= ACTIVITY_TIMEOUT:
-                # End current active period
+                # End current active burst — only record if it has non-zero duration
                 active_duration = (last_ts - active_start) * 1_000_000
                 if active_duration > 0:
                     active_times.append(active_duration)
-                # Record idle period
+                # Record the idle gap
                 idle_times.append(diff)
                 # Start new active period
                 active_start = pkt.timestamp
-            
+
             last_ts = pkt.timestamp
-        
-        # Close final active period
-        active_duration = (last_ts - active_start) * 1_000_000
-        if active_duration > 0:
-            active_times.append(active_duration)
-        
+
+        # NOTE: The trailing active burst (from active_start to last_ts) is
+        # intentionally NOT appended here. The original Java CICFlowMeter only
+        # records active periods that have been *terminated* by an idle gap.
+        # Adding the trailing burst would inflate Active Mean/Max for flows
+        # with no idle periods (which is the common case for short flows).
+
         return active_times, idle_times
+
     
     def get_features(self) -> Dict[str, Any]:
         """Compute all CICFlowMeter features and return as ordered dict.
@@ -260,15 +265,16 @@ class Flow:
         act_data_pkt_fwd = sum(1 for p in self.fwd_packets if p.payload_length > 0)
         
         
-        # -- min_seg_size_forward: minimum TCP segment size in forward direction --
-        fwd_seg_sizes = [p.segment_size for p in self.fwd_packets
-                         if p.segment_size > 0]
-        min_seg_fwd = safe_min(fwd_seg_sizes) if fwd_seg_sizes else 0
-        # If no segments with data, use the minimum observed header size as CICFlowMeter does
-        if min_seg_fwd == 0 and self.fwd_packets:
-            # CICFlowMeter uses the IP header length of the first forward packet
-            # as min_seg_size_forward when there are no data segments
-            min_seg_fwd = self.fwd_packets[0].ip_header_length + self.fwd_packets[0].transport_header_length
+        # -- min_seg_size_forward: minimum TCP header length in the forward direction --
+        # CICFlowMeter Java source uses the minimum value of the TCP header length
+        # field across all forward packets (dataOffset * 4), NOT the payload size.
+        # Typical values: 20 (no options), 32 (12 bytes options), 40 (20 bytes options).
+        if self.fwd_packets:
+            fwd_tcp_header_sizes = [p.transport_header_length for p in self.fwd_packets
+                                    if p.transport_header_length > 0]
+            min_seg_fwd = safe_min(fwd_tcp_header_sizes) if fwd_tcp_header_sizes else 0
+        else:
+            min_seg_fwd = 0
         
         # -- Initial window sizes --
         init_win_fwd = self.init_win_fwd if self.init_win_fwd != -1 else 0

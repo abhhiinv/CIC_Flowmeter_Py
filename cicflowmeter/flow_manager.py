@@ -63,12 +63,29 @@ class FlowManager:
         flow_key = self._make_flow_key(pkt)
         
         if flow_key not in self.active_flows:
-            # Create new flow - the first packet defines forward direction
+            # Determine the canonical forward direction.
+            # For TCP flows: the SYN-only sender (not SYN-ACK) is definitively
+            # the client and should always be "forward", even if a response
+            # packet was captured first by the sniffer (asymmetric capture).
+            # For all other cases: first-seen packet defines forward direction.
+            fwd_src_ip = pkt.src_ip
+            fwd_src_port = pkt.src_port
+            fwd_dst_ip = pkt.dst_ip
+            fwd_dst_port = pkt.dst_port
+
+            if pkt.has_syn and not pkt.has_ack:
+                # SYN-only: this packet IS from the client — forward direction confirmed
+                pass  # already set correctly above
+            elif pkt.has_syn and pkt.has_ack:
+                # SYN-ACK: this is the SERVER's reply — swap so client is forward
+                fwd_src_ip, fwd_dst_ip = pkt.dst_ip, pkt.src_ip
+                fwd_src_port, fwd_dst_port = pkt.dst_port, pkt.src_port
+
             flow = Flow(
-                src_ip=pkt.src_ip,
-                dst_ip=pkt.dst_ip,
-                src_port=pkt.src_port,
-                dst_port=pkt.dst_port,
+                src_ip=fwd_src_ip,
+                dst_ip=fwd_dst_ip,
+                src_port=fwd_src_port,
+                dst_port=fwd_dst_port,
                 protocol=pkt.protocol_str,
                 label=self.label
             )
@@ -77,7 +94,8 @@ class FlowManager:
         
         flow = self.active_flows[flow_key]
         
-        # Determine direction: forward if packet source matches the flow's original source
+        # Determine direction: forward if packet source matches the flow's original
+        # first-seen source (stored in flow.src_ip / flow.src_port at creation time).
         pkt.is_forward = (pkt.src_ip == flow.src_ip and pkt.src_port == flow.src_port)
         
         # Add packet to flow

@@ -304,6 +304,7 @@ def process_pcap(pcap_file: str, output_file: str,
 def process_live(interface: str,
                  output_file: Optional[str] = None,
                  predict: bool = False,
+                 psd: bool = False,
                  bpf_filter: str = "",
                  packet_count: int = 0,
                  capture_timeout: Optional[float] = None,
@@ -326,6 +327,8 @@ def process_live(interface: str,
         print(f"  Output CSV: {output_file}")
     if predict:
         print(f"  ML Prediction: ENABLED")
+    if psd:
+        print(f"  Port Scan Detector: ENABLED")
     print(f"  Flow timeout: {timeout}s")
     print(f"\nPress Ctrl+C to stop capture.\n")
     
@@ -338,16 +341,16 @@ def process_live(interface: str,
         csv_writer.open()
     
     predictor_instance = None
-    portscan_detector = None
     if predict:
         predictor_instance = Predictor()
         print("Loading ML model...")
         predictor_instance.load()
         print("Model loaded. Starting capture...\n")
-        # Always pair the ML predictor with the port scan detector so that
-        # scan probes that slip past the per-flow model are caught cross-flow.
+
+    portscan_detector = None
+    if psd:
         portscan_detector = PortScanDetector()
-        print(f"Port Scan Detector: ENABLED "
+        print(f"Port Scan Detector active "
               f"(threshold: {portscan_detector.port_threshold} unique ports "
               f"/ {portscan_detector.window_seconds:.0f}s window)\n")
     
@@ -471,6 +474,8 @@ Examples:
   %(prog)s --pcap sample.pcap --output output.csv --predict
   %(prog)s --live --interface Wi-Fi
   %(prog)s --live --interface Wi-Fi --predict
+  %(prog)s --live --interface Wi-Fi --predict --psd
+  %(prog)s --live --interface Wi-Fi --psd
   %(prog)s --live --interface Wi-Fi --output live.csv --predict
   %(prog)s --live --interface Ethernet --filter "tcp port 80"
   %(prog)s --list-interfaces
@@ -491,6 +496,8 @@ Examples:
                         help='Output CSV file path')
     parser.add_argument('--predict', action='store_true',
                         help='Enable ML prediction on completed flows')
+    parser.add_argument('--psd', action='store_true',
+                        help='Enable cross-flow Port Scan Detector (works with or without --predict)')
     parser.add_argument('--timeout', type=float, default=FLOW_TIMEOUT_SECONDS,
                         help=f'Flow inactivity timeout in seconds '
                              f'(default: {FLOW_TIMEOUT_SECONDS}; '
@@ -532,6 +539,7 @@ Examples:
             interface=args.interface,
             output_file=args.output,
             predict=args.predict,
+            psd=args.psd,
             bpf_filter=args.filter,
             packet_count=args.count,
             capture_timeout=args.capture_timeout,

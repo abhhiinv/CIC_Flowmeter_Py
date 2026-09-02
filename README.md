@@ -10,6 +10,7 @@ A Python implementation of CICFlowMeter that extracts network flow features from
 - **Offline PCAP processing** — convert `.pcap` / `.pcapng` files to feature CSVs
 - **Live packet capture** — sniff traffic from any network interface in real time
 - **ML prediction** — classify each flow as Normal Traffic or one of 4 attack categories
+- **Port Scan Detector** (`--psd`) — cross-flow detection that catches scans the per-flow model misses
 - **Streaming architecture** — constant memory, writes flows to CSV as they complete
 - **Multiprocessing** — parallel chunk processing for multi-GB PCAPs
 - **Directory batch mode** — process entire folders of PCAPs at once
@@ -117,8 +118,9 @@ python main.py [MODE] [OPTIONS]
 |---|---|---|
 | `--output FILE`, `-o` | Auto-generated | Output CSV file path |
 | `--predict` | Off | Enable ML attack classification |
-| `--timeout SECONDS` | `120` | Flow inactivity timeout in seconds |
-| `--label TEXT` | `Benign` | Default attack type label |
+| `--psd` | Off | Enable cross-flow Port Scan Detector (works independently of `--predict`) |
+| `--timeout SECONDS` | `30` | Flow inactivity timeout in seconds |
+| `--label TEXT` | `Normal Traffic` | Default attack type label |
 | `--debug` | Off | Enable verbose debug logging |
 
 #### Live Capture Options
@@ -202,6 +204,38 @@ python main.py --live --interface Wi-Fi --count 1000 --output sample.csv
 ```
 
 Press **Ctrl+C** at any time during live capture to stop. All active flows will be flushed and written to CSV.
+
+### Live capture — with Port Scan Detector only (no ML model needed)
+
+```bash
+python main.py --live --interface Wi-Fi --psd
+```
+
+### Live capture — ML prediction + Port Scan Detector together
+
+```bash
+python main.py --live --interface Wi-Fi --predict --psd
+```
+
+---
+
+## Port Scan Detector (`--psd`)
+
+The ML model classifies flows individually and **cannot detect port scans** — each single probe (SYN + RST/SYN-ACK) looks identical to normal traffic. The `--psd` flag enables a cross-flow detector that tracks unique `(dst_ip, dst_port)` contacts per source IP within a sliding time window.
+
+| Parameter | Default | Description |
+|---|---|---|
+| Window | 60 seconds | Sliding time window for counting probe contacts |
+| Threshold | 15 unique ports | Number of unique `(dst_ip, dst_port)` pairs before flagging |
+
+**Alert behaviour:**
+- The alert is printed **once per scan episode** (when the threshold is first crossed).
+- Subsequent flows from the same attacker during the episode are labelled `Port Scan` in the CSV without reprinting the alert.
+- The episode resets once probe entries age out of the 60-second window.
+
+**Works on all address types** — including IPv6 link-local (`fe80::`) port scans that the ML model never sees.
+
+**Can be used without `--predict`** — the detector runs independently of the ML model and requires no model files.
 
 ---
 
