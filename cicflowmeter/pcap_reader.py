@@ -19,7 +19,8 @@ def parse_packet(raw_packet) -> Optional[PacketInfo]:
     """Parse a Scapy packet into a PacketInfo dataclass.
     
     Extracts all fields needed for CICFlowMeter feature computation.
-    Returns None if the packet cannot be parsed (no IP layer).
+    Returns None if the packet cannot be parsed (no IP layer, or no
+    recognisable transport layer).
     """
     pkt = PacketInfo()
     
@@ -32,16 +33,29 @@ def parse_packet(raw_packet) -> Optional[PacketInfo]:
         pkt.src_ip = ip_layer.src
         pkt.dst_ip = ip_layer.dst
         pkt.protocol = ip_layer.proto
-        # IP header length: ihl field is in 32-bit words
-        pkt.ip_header_length = ip_layer.ihl * 4
-        pkt.packet_length = ip_layer.len  # Total IP packet length
+        # IP header length: ihl is in 32-bit words; default to 5 (20 bytes) if unset
+        ihl = ip_layer.ihl
+        pkt.ip_header_length = (ihl * 4) if ihl else 20
+        # packet_length = total IP packet length (header + payload)
+        ip_len = ip_layer.len
+        pkt.packet_length = ip_len if ip_len else len(bytes(raw_packet[IP]))
     elif raw_packet.haslayer(IPv6):
         ipv6_layer = raw_packet[IPv6]
         pkt.src_ip = ipv6_layer.src
         pkt.dst_ip = ipv6_layer.dst
-        pkt.protocol = ipv6_layer.nh  # next header
-        pkt.ip_header_length = 40  # IPv6 fixed header is 40 bytes
-        pkt.packet_length = 40 + ipv6_layer.plen
+        pkt.ip_header_length = 40  # IPv6 fixed header is always 40 bytes
+        # plen = payload length (everything after the 40-byte fixed header)
+        pkt.packet_length = 40 + (ipv6_layer.plen if ipv6_layer.plen else 0)
+        # Walk the next-header chain to find the actual transport protocol.
+        # IPv6 extension headers (routing=43, fragment=44, hop-by-hop=0,
+        # dest-options=60, etc.) sit between the IPv6 header and TCP/UDP.
+        # Scapy exposes the innermost TCP/UDP layer directly via haslayer().
+        if raw_packet.haslayer(TCP):
+            pkt.protocol = 6
+        elif raw_packet.haslayer(UDP):
+            pkt.protocol = 17
+        else:
+            pkt.protocol = ipv6_layer.nh  # fallback for other protocols
     else:
         # Skip non-IP packets (ARP, etc.) - CICFlowMeter only processes IP
         return None
@@ -53,8 +67,10 @@ def parse_packet(raw_packet) -> Optional[PacketInfo]:
         pkt.dst_port = tcp_layer.dport
         pkt.protocol_str = "TCP"
         
-        # TCP header length: dataofs field is in 32-bit words
-        pkt.transport_header_length = tcp_layer.dataofs * 4 if tcp_layer.dataofs else 20
+        # TCP header length: dataofs field is in 32-bit words (minimum 5 = 20 bytes)
+        pkt.transport_header_length = (tcp_layer.dataofs * 4
+                                       if tcp_layer.dataofs and tcp_layer.dataofs >= 5
+                                       else 20)
         
         # TCP flags
         flags = tcp_layer.flags
@@ -76,9 +92,9 @@ def parse_packet(raw_packet) -> Optional[PacketInfo]:
         pkt.seq_number = tcp_layer.seq
         pkt.ack_number = tcp_layer.ack
         
-        # Payload length = total IP length - IP header - TCP header
-        pkt.payload_length = max(0, pkt.packet_length - pkt.ip_header_length - pkt.transport_header_length)
-        # Segment size = same as payload length for TCP
+        # Payload length = total packet length - IP header - TCP header
+        pkt.payload_length = max(0,
+            pkt.packet_length - pkt.ip_header_length - pkt.transport_header_length)
         pkt.segment_size = pkt.payload_length
         
     elif raw_packet.haslayer(UDP):
@@ -88,11 +104,12 @@ def parse_packet(raw_packet) -> Optional[PacketInfo]:
         pkt.protocol_str = "UDP"
         pkt.transport_header_length = 8  # UDP header is always 8 bytes
         
-        # Payload length = total IP length - IP header - UDP header
-        pkt.payload_length = max(0, pkt.packet_length - pkt.ip_header_length - 8)
+        # Payload length = total packet length - IP header - UDP header
+        pkt.payload_length = max(0,
+            pkt.packet_length - pkt.ip_header_length - 8)
         pkt.segment_size = pkt.payload_length
     else:
-        # Other protocols (ICMP, etc.) - set port to 0
+        # Other protocols (ICMP, etc.) - no ports, no transport header
         pkt.src_port = 0
         pkt.dst_port = 0
         pkt.protocol_str = f"OTHER_{pkt.protocol}"

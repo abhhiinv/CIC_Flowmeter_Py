@@ -247,12 +247,10 @@ class Flow:
         bwd_iats = self._compute_iat(self.bwd_packets)
         
         # -- Header lengths --
-        # Forward header length = sum of (IP header + transport header) for each fwd packet
-        fwd_header_length = sum(p.ip_header_length + p.transport_header_length
-                                for p in self.fwd_packets)
-        # Backward header length
-        bwd_header_length = sum(p.ip_header_length + p.transport_header_length
-                                for p in self.bwd_packets)
+        # CICFlowMeter Java: fwdHeaderLength += tcpHeaderLength (transport only, not IP).
+        # This is the sum of TCP/UDP header bytes across all forward packets.
+        fwd_header_length = sum(p.transport_header_length for p in self.fwd_packets)
+        bwd_header_length = sum(p.transport_header_length for p in self.bwd_packets)
         
         # -- TCP Flag counts (across ALL packets in flow) --
         all_packets = self.fwd_packets + self.bwd_packets
