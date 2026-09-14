@@ -28,20 +28,20 @@ DEFAULT_BPF_FILTER = ""             # Empty = capture everything
 FLOW_CLEANUP_INTERVAL = 5.0         # Seconds between timeout sweeps in live mode
 CSV_FLUSH_INTERVAL = 100            # Rows between explicit CSV flushes
 
-# ── Feature columns (46 numeric features – excludes "Attack Type") ──────
+# ── Feature columns (40 numeric features fed to model – excludes "Attack Type") ──
+# Removed vs. the 46-feature extractor output:
+#   Destination Port, Total Length of Bwd Packets, Bwd Packet Length Min,
+#   Fwd IAT Mean, Bwd IAT Mean, Packet Length Variance
 MODEL_FEATURE_COLUMNS = [
-    "Destination Port",
     "Flow Duration",
     "Total Fwd Packets",
     "Total Backward Packets",
     "Total Length of Fwd Packets",
-    "Total Length of Bwd Packets",
     "Fwd Packet Length Max",
     "Fwd Packet Length Min",
     "Fwd Packet Length Mean",
     "Fwd Packet Length Std",
     "Bwd Packet Length Max",
-    "Bwd Packet Length Min",
     "Bwd Packet Length Mean",
     "Bwd Packet Length Std",
     "Flow Bytes/s",
@@ -50,11 +50,9 @@ MODEL_FEATURE_COLUMNS = [
     "Flow IAT Std",
     "Flow IAT Max",
     "Flow IAT Min",
-    "Fwd IAT Mean",
     "Fwd IAT Std",
     "Fwd IAT Min",
     "Bwd IAT Total",
-    "Bwd IAT Mean",
     "Bwd IAT Max",
     "Bwd IAT Min",
     "Fwd Header Length",
@@ -64,7 +62,6 @@ MODEL_FEATURE_COLUMNS = [
     "Max Packet Length",
     "Packet Length Mean",
     "Packet Length Std",
-    "Packet Length Variance",
     "FIN Flag Count",
     "PSH Flag Count",
     "ACK Flag Count",
@@ -75,5 +72,5 @@ MODEL_FEATURE_COLUMNS = [
     "Active Mean",
     "Active Max",
     "Active Min",
-    "Idle Mean"
+    "Idle Mean",
 ]
