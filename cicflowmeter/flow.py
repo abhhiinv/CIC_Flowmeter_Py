@@ -275,8 +275,8 @@ class Flow:
             min_seg_fwd = 0
         
         # -- Initial window sizes --
-        init_win_fwd = self.init_win_fwd if self.init_win_fwd != -1 else 0
-        init_win_bwd = self.init_win_bwd if self.init_win_bwd != -1 else 0
+        init_win_fwd = self.init_win_fwd   # keep -1 when no window was recorded, as in CIC datasets
+        init_win_bwd = self.init_win_bwd
         
         # -- Active / Idle times --
         active_times, idle_times = self._compute_active_idle()
