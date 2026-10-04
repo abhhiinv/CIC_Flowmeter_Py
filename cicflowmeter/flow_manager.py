@@ -48,37 +48,43 @@ class FlowManager:
         )
     
     def add_packet(self, pkt: PacketInfo) -> List[Flow]:
-        """Add a packet and return any flows that have timed out.
-        
-        Returns a list of completed (timed-out) flows that were evicted.
-        The caller should extract features from these flows and write to CSV.
+        """Add a packet and return any flows that completed.
+
+        A flow completes in two ways:
+          1. Inactivity timeout — checked at the top of every call.
+          2. First FIN — Java CICFlowMeter terminates the flow on the first FIN
+             it sees (from either direction). This produces shorter, cleaner flows
+             whose packet counts, IAT values and flag distributions match the
+             CICIDS2017 training data. The trailing ACK/FIN/ACK exchange then
+             lands in a new short "appendix" flow, just as in the original tool.
+
+        Returns a list of completed flows. The caller extracts features from
+        these and writes them to CSV.
         """
         self.packet_count += 1
         completed_flows: List[Flow] = []
-        
-        # First, check for timed-out flows based on current packet time
+
+        # Check for timed-out flows based on current packet time
         completed_flows.extend(self._check_timeouts(pkt.timestamp))
-        
+
         # Find or create the flow
         flow_key = self._make_flow_key(pkt)
-        
+
         if flow_key not in self.active_flows:
             # Determine the canonical forward direction.
-            # For TCP flows: the SYN-only sender (not SYN-ACK) is definitively
-            # the client and should always be "forward", even if a response
-            # packet was captured first by the sniffer (asymmetric capture).
-            # For all other cases: first-seen packet defines forward direction.
-            fwd_src_ip = pkt.src_ip
+            # For TCP: SYN-only sender is the client (forward). If the first
+            # packet captured is SYN-ACK (asymmetric capture), swap directions.
+            # For all other protocols: first-seen packet defines forward.
+            fwd_src_ip   = pkt.src_ip
             fwd_src_port = pkt.src_port
-            fwd_dst_ip = pkt.dst_ip
+            fwd_dst_ip   = pkt.dst_ip
             fwd_dst_port = pkt.dst_port
 
             if pkt.has_syn and not pkt.has_ack:
-                # SYN-only: this packet IS from the client — forward direction confirmed
-                pass  # already set correctly above
+                pass  # SYN-only → sender is client; already set correctly
             elif pkt.has_syn and pkt.has_ack:
-                # SYN-ACK: this is the SERVER's reply — swap so client is forward
-                fwd_src_ip, fwd_dst_ip = pkt.dst_ip, pkt.src_ip
+                # SYN-ACK → server reply captured first; swap so client is fwd
+                fwd_src_ip,   fwd_dst_ip   = pkt.dst_ip,   pkt.src_ip
                 fwd_src_port, fwd_dst_port = pkt.dst_port, pkt.src_port
 
             flow = Flow(
@@ -91,17 +97,29 @@ class FlowManager:
             )
             self.active_flows[flow_key] = flow
             self.flow_count += 1
-        
+
         flow = self.active_flows[flow_key]
-        
-        # Determine direction: forward if packet source matches the flow's original
-        # first-seen source (stored in flow.src_ip / flow.src_port at creation time).
+
+        # Direction: forward if source matches the flow's canonical client endpoint
         pkt.is_forward = (pkt.src_ip == flow.src_ip and pkt.src_port == flow.src_port)
-        
-        # Add packet to flow
+
+        # Add packet to flow (always include the FIN packet itself in the flow)
         flow.add_packet(pkt)
-        
+
+        # ── FIN splitting (Java CICFlowMeter behaviour) ─────────────────────
+        # Terminate on the FIRST FIN seen from either direction.  The trailing
+        # ACK / FIN / ACK exchange naturally forms a new appendix flow.
+        if pkt.has_fin and flow_key in self.active_flows:
+            logger.debug(
+                "FIN received — terminating flow %s:%s→%s:%s (%d pkts)",
+                flow.src_ip, flow.src_port, flow.dst_ip, flow.dst_port,
+                flow._fwd_count + flow._bwd_count,
+            )
+            completed_flows.append(flow)
+            del self.active_flows[flow_key]
+
         return completed_flows
+
     
     def _check_timeouts(self, current_time: float) -> List[Flow]:
         """Check for flows that have exceeded the inactivity timeout.
