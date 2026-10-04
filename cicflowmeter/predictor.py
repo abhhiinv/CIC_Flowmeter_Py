@@ -126,8 +126,9 @@ class Predictor:
         # Replace infinities with 0
         df = df.replace([np.inf, -np.inf], 0)
         
-        # Scale features
-        scaled = self.scaler.transform(df.values)
+        # Scale features — pass DataFrame (not .values) so column names match
+        # what the scaler was fitted on, silencing the feature_names_in_ warning.
+        scaled = self.scaler.transform(df)
         
         return scaled
     
@@ -204,8 +205,8 @@ class Predictor:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         df = df.replace([np.inf, -np.inf], 0)
         
-        # Scale
-        scaled = self.scaler.transform(df.values)
+        # Scale — pass DataFrame so column names match the fitted scaler
+        scaled = self.scaler.transform(df)
         
         # Predict
         predictions_encoded = self.model.predict(scaled)
