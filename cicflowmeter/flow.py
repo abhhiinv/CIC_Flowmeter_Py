@@ -68,9 +68,7 @@ COLUMN_NAMES = [
     "Init_Win_bytes_backward",
     "act_data_pkt_fwd",
     "min_seg_size_forward",
-    "Active Mean",
     "Active Max",
-    "Active Min",
     "Idle Mean",
     "Attack Type"
 ]
@@ -371,9 +369,7 @@ class Flow:
             "min_seg_size_forward": min_seg_fwd,
             
             # Active time statistics (microseconds)
-            "Active Mean": safe_mean(active_times),
             "Active Max": safe_max(active_times),
-            "Active Min": safe_min(active_times),
             
             # Idle time statistics (microseconds)
             "Idle Mean": safe_mean(idle_times),
