@@ -142,6 +142,12 @@ class FlowManager:
             if flow.last_packet_time > 0:  # flow has at least one packet
                 idle_time = current_time - flow.last_packet_time
                 if idle_time > self.timeout:
+                    logger.debug(
+                        "TIMEOUT (%.1fs idle > %.1fs) — terminating flow %s:%s→%s:%s (%d pkts)",
+                        idle_time, self.timeout,
+                        flow.src_ip, flow.src_port, flow.dst_ip, flow.dst_port,
+                        flow._fwd_count + flow._bwd_count,
+                    )
                     timed_out.append(flow)
                     keys_to_remove.append(key)
         
@@ -157,6 +163,12 @@ class FlowManager:
         Returns all active flows and clears the manager.
         """
         remaining = list(self.active_flows.values())
+        for flow in remaining:
+            logger.debug(
+                "FLUSH (end of capture) — finalizing flow %s:%s→%s:%s (%d pkts)",
+                flow.src_ip, flow.src_port, flow.dst_ip, flow.dst_port,
+                flow._fwd_count + flow._bwd_count,
+            )
         self.active_flows.clear()
         return remaining
     
