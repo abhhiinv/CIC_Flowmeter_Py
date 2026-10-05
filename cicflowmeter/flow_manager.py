@@ -15,8 +15,8 @@ from .packet_info import PacketInfo
 
 logger = logging.getLogger(__name__)
 
-# Flow inactivity timeout in seconds
-FLOW_TIMEOUT_SECONDS = 30.0
+# Flow inactivity timeout in seconds (Java CICFlowMeter default is 120s)
+FLOW_TIMEOUT_SECONDS = 120.0
 
 
 class FlowManager:
@@ -106,12 +106,18 @@ class FlowManager:
         # Add packet to flow (always include the FIN packet itself in the flow)
         flow.add_packet(pkt)
 
-        # ── FIN splitting (Java CICFlowMeter behaviour) ─────────────────────
-        # Terminate on the FIRST FIN seen from either direction.  The trailing
-        # ACK / FIN / ACK exchange naturally forms a new appendix flow.
-        if pkt.has_fin and flow_key in self.active_flows:
+        # ── FIN / RST splitting (Java CICFlowMeter behaviour) ───────────────
+        # Terminate on the FIRST FIN or RST seen from either direction.
+        # • FIN: graceful close — trailing ACK/FIN/ACK forms an appendix flow.
+        # • RST: aborted connection — no further packets expected on this flow.
+        # Both produce the same short-flow semantics seen in CICIDS2017 CSVs.
+        # The inactivity timeout (120s) remains the fallback for flows that
+        # never receive a FIN/RST (e.g. UDP, long-lived TCP, truncated captures).
+        if (pkt.has_fin or pkt.has_rst) and flow_key in self.active_flows:
+            reason = "FIN" if pkt.has_fin else "RST"
             logger.debug(
-                "FIN received — terminating flow %s:%s→%s:%s (%d pkts)",
+                "%s received — terminating flow %s:%s→%s:%s (%d pkts)",
+                reason,
                 flow.src_ip, flow.src_port, flow.dst_ip, flow.dst_port,
                 flow._fwd_count + flow._bwd_count,
             )

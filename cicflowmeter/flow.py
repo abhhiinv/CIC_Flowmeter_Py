@@ -49,6 +49,7 @@ COLUMN_NAMES = [
     "Fwd IAT Min",
     "Bwd IAT Total",
     "Bwd IAT Mean",
+    "Bwd IAT Std",
     "Bwd IAT Max",
     "Bwd IAT Min",
     "Fwd Header Length",
@@ -60,6 +61,7 @@ COLUMN_NAMES = [
     "Packet Length Std",
     "Packet Length Variance",
     "FIN Flag Count",
+    "RST Flag Count",
     "PSH Flag Count",
     "ACK Flag Count",
     "Init_Win_bytes_forward",
@@ -255,6 +257,7 @@ class Flow:
         # -- TCP Flag counts (across ALL packets in flow) --
         all_packets = self.fwd_packets + self.bwd_packets
         fin_count = sum(1 for p in all_packets if p.has_fin)
+        rst_count = sum(1 for p in all_packets if p.has_rst)
         psh_count = sum(1 for p in all_packets if p.has_psh)
         ack_count = sum(1 for p in all_packets if p.has_ack)
         
@@ -353,6 +356,7 @@ class Flow:
             
             # TCP Flag counts
             "FIN Flag Count": fin_count,
+            "RST Flag Count": rst_count,
             "PSH Flag Count": psh_count,
             "ACK Flag Count": ack_count,
             

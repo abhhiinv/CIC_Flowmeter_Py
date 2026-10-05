@@ -16,7 +16,7 @@ SCALER_PATH = MODEL_DIR / "scaler.pkl"
 LABEL_ENCODER_PATH = MODEL_DIR / "label_encoder.pkl"
 
 # ── Flow settings ────────────────────────────────────────────────────────
-FLOW_TIMEOUT_SECONDS = 30.0         # Inactivity timeout before flow expires
+FLOW_TIMEOUT_SECONDS = 120.0         # Inactivity timeout before flow expires (Java CICFlowMeter default)
 ACTIVITY_TIMEOUT_US = 5_000_000.0   # 5 s in microseconds (active/idle split)
 
 # ── Live capture defaults ────────────────────────────────────────────────
