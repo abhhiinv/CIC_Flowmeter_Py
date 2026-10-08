@@ -292,16 +292,22 @@ def start_dashboard_server(host: str = "127.0.0.1", port: int = 8000, open_brows
     print(f"\n[FastAPI] Dashboard server running at: {url}")
 
     if open_browser:
-        def _open():
-            # Small delay to ensure the HTTP server is listening
-            import time
-            time.sleep(1.2)
-            try:
-                print(f"[FastAPI] Launching web UI at {url}...")
-                webbrowser.open(url)
-            except Exception as e:
-                logger.warning(f"Failed to auto-open browser: {e}")
+        # Check if running as root on Unix, because browsers crash when opened as root without sandbox
+        is_root = hasattr(os, "geteuid") and os.geteuid() == 0
+        if is_root:
+            print(f"[FastAPI] Running as root. Auto-browser launch disabled to prevent sandbox crash.")
+            print(f"[FastAPI] Please open {url} manually in your regular browser.")
+        else:
+            def _open():
+                # Small delay to ensure the HTTP server is listening
+                import time
+                time.sleep(1.2)
+                try:
+                    print(f"[FastAPI] Launching web UI at {url}...")
+                    webbrowser.open(url)
+                except Exception as e:
+                    logger.warning(f"Failed to auto-open browser: {e}")
 
-        threading.Thread(target=_open, daemon=True).start()
+            threading.Thread(target=_open, daemon=True).start()
 
     return thread
