@@ -42,6 +42,14 @@ from cicflowmeter.config import (
 from cicflowmeter.capture import LiveCapture, CAPTURE_DONE, list_interfaces
 from cicflowmeter.predictor import Predictor
 from cicflowmeter.portscan_detector import PortScanDetector
+from cicflowmeter.alerts import (
+    get_severity, is_attack_label, get_terminal_severity_badge,
+    build_alert_payload, SEVERITY_CRITICAL, SEVERITY_HIGH, SEVERITY_MEDIUM
+)
+from cicflowmeter.server import broadcast_flow, start_dashboard_server, set_system_metadata
+
+if os.name == 'nt':
+    os.system('')  # Enable ANSI terminal escape codes in Windows console
 
 logging.basicConfig(
     level=logging.INFO,
@@ -145,6 +153,7 @@ def handle_completed_flow(flow: Flow,
         if is_scan:
             scan_result = {
                 'label': 'Port Scan',
+                'severity': get_severity('Port Scan'),
                 'confidence': None,
                 'probabilities': None,
                 '_scan_unique_ports': unique_ports,
@@ -166,6 +175,26 @@ def handle_completed_flow(flow: Flow,
         print(output)
         print(f"{'-' * 50}")
 
+        # Broadcast port scan incident immediately
+        flow_bytes = int(features.get('Flow Bytes/s', 0) * (features.get('Flow Duration', 0) / 1_000_000.0))
+        if flow_bytes <= 0:
+            flow_bytes = int(features.get('Total Length of Fwd Packets', 0) + features.get('Total Length of Bwd Packets', 0))
+        broadcast_flow(build_alert_payload(
+            flow_num=flow_num,
+            start_dt=start_dt,
+            src_ip=flow.src_ip,
+            src_port=flow.src_port,
+            dst_ip=flow.dst_ip,
+            dst_port=flow.dst_port,
+            protocol=flow.protocol,
+            label='Port Scan',
+            confidence=None,
+            probabilities=None,
+            duration_us=float(features.get('Flow Duration', 0)),
+            packet_count=flow._fwd_count + flow._bwd_count,
+            byte_count=flow_bytes,
+        ))
+
     # Skip internal/infrastructure traffic from ML prediction and normal output.
     # Write to CSV first with final label, then return early.
     if is_internal_traffic(flow.src_ip, flow.dst_ip):
@@ -179,6 +208,7 @@ def handle_completed_flow(flow: Flow,
         return
 
     # Run ML prediction
+    result = None
     if predictor is not None:
         try:
             # Use the scan override result if detector already fired above,
@@ -224,11 +254,34 @@ def handle_completed_flow(flow: Flow,
         if csv_writer is not None:
             csv_writer.write_flow(flow)
         total_pkts = flow._fwd_count + flow._bwd_count
+        severity = get_severity(flow.label)
+        badge = get_terminal_severity_badge(severity)
         print(f"[Flow #{flow_num}] {start_dt} | "
               f"{flow.src_ip}:{flow.src_port} -> "
               f"{flow.dst_ip}:{flow.dst_port} | "
               f"{total_pkts} pkts | "
-              f"Duration: {features['Flow Duration']} us")
+              f"Duration: {features['Flow Duration']} us | {badge}")
+
+    # Broadcast to web dashboard
+    flow_bytes = int(features.get('Flow Bytes/s', 0) * (features.get('Flow Duration', 0) / 1_000_000.0))
+    if flow_bytes <= 0:
+        flow_bytes = int(features.get('Total Length of Fwd Packets', 0) + features.get('Total Length of Bwd Packets', 0))
+
+    broadcast_flow(build_alert_payload(
+        flow_num=flow_num,
+        start_dt=start_dt,
+        src_ip=flow.src_ip,
+        src_port=flow.src_port,
+        dst_ip=flow.dst_ip,
+        dst_port=flow.dst_port,
+        protocol=flow.protocol,
+        label=flow.label,
+        confidence=result.get('confidence') if result else None,
+        probabilities=result.get('probabilities') if result else None,
+        duration_us=float(features.get('Flow Duration', 0)),
+        packet_count=flow._fwd_count + flow._bwd_count,
+        byte_count=flow_bytes,
+    ))
 
 
 
@@ -519,6 +572,19 @@ Examples:
     # Logging
     parser.add_argument('--debug', action='store_true',
                         help='Enable debug logging')
+
+    # Web Dashboard options
+    dash_group = parser.add_argument_group('Web Dashboard options')
+    dash_group.add_argument('--ui', action='store_true', default=True,
+                            help='Enable FastAPI & React Web Dashboard (default: enabled)')
+    dash_group.add_argument('--no-ui', action='store_false', dest='ui',
+                            help='Disable Web Dashboard')
+    dash_group.add_argument('--host', type=str, default='127.0.0.1',
+                            help='Dashboard server host (default: 127.0.0.1)')
+    dash_group.add_argument('--port', type=int, default=8000,
+                            help='Dashboard server port (default: 8000)')
+    dash_group.add_argument('--no-browser', action='store_true',
+                            help='Do not auto-open browser on startup')
     
     args = parser.parse_args()
     
@@ -529,7 +595,21 @@ Examples:
     if args.list_interfaces:
         list_interfaces()
         return
-    
+
+    # ── Start FastAPI Web Dashboard (runs in background thread) ──
+    if getattr(args, 'ui', True) and (args.live or args.pcap):
+        source_name = args.interface if args.live else (Path(args.pcap).name if args.pcap else None)
+        set_system_metadata(
+            interface=source_name,
+            ml=args.predict,
+            psd=args.psd
+        )
+        start_dashboard_server(
+            host=args.host,
+            port=args.port,
+            open_browser=(not args.no_browser)
+        )
+
     # ── Live mode ──
     if args.live:
         if not args.interface:

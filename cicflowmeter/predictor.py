@@ -15,6 +15,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 
 from .config import MODEL_PATH, SCALER_PATH, LABEL_ENCODER_PATH, MODEL_FEATURE_COLUMNS
+from .alerts import get_severity, get_terminal_severity_badge
 
 # Suppress sklearn's joblib thread-context warning that appears during live capture
 warnings.filterwarnings(
@@ -169,8 +170,11 @@ class Predictor:
             except Exception as e:
                 logger.warning(f"Could not get probabilities: {e}")
         
+        severity = get_severity(label)
+
         return {
             'label': label,
+            'severity': severity,
             'confidence': confidence,
             'probabilities': probabilities
         }
@@ -238,12 +242,16 @@ class Predictor:
                           dst_ip: str, dst_port: int,
                           result: Dict[str, Any]) -> str:
         """Format a prediction result for console display."""
+        label = result['label']
+        severity = result.get('severity') or get_severity(label)
+        badge = get_terminal_severity_badge(severity)
+
         lines = []
         lines.append(f"Flow:")
         lines.append(f"  {src_ip}:{src_port} -> {dst_ip}:{dst_port}")
         lines.append(f"")
         lines.append(f"Prediction:")
-        lines.append(f"  {result['label']}")
+        lines.append(f"  {label}  {badge}")
         
         if result['confidence'] is not None:
             lines.append(f"")

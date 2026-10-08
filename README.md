@@ -8,6 +8,8 @@ A Python implementation of CICFlowMeter that extracts network flow features from
 
 - **CICFlowMeter-compatible output** — generates 46 numeric features + attack label per flow (CSV)
 - **40-feature ML pipeline** — model consumes a curated subset of 40 features
+- **FastAPI & React SOC Dashboard** — real-time web UI with color-coded threat severity and sound alerts
+- **Color-Based Severity Alerting** — Critical (DDoS/DoS), High (Brute Force), Medium (Port Scan)
 - **Offline PCAP processing** — convert `.pcap` / `.pcapng` files to feature CSVs
 - **Live packet capture** — sniff traffic from any network interface in real time
 - **ML prediction** — classify each flow as Normal Traffic or one of 4 attack categories
@@ -34,12 +36,15 @@ joblib
 scikit-learn
 xgboost
 numpy
+fastapi
+uvicorn
+websockets
 ```
 
 ### Install Dependencies
 
 ```bash
-pip install scapy pandas joblib scikit-learn xgboost numpy
+pip install scapy pandas joblib scikit-learn xgboost numpy fastapi uvicorn websockets
 ```
 
 > **Windows users:** Install [Npcap](https://npcap.com/) with "WinPcap API-compatible mode" enabled for live capture support.
@@ -123,8 +128,12 @@ python main.py [MODE] [OPTIONS]
 | `--output FILE`, `-o` | Auto-generated | Output CSV file path |
 | `--predict` | Off | Enable ML attack classification |
 | `--psd` | Off | Enable cross-flow Port Scan Detector (independent of `--predict`) |
-| `--timeout SECONDS` | `30` | Flow inactivity timeout in seconds |
+| `--timeout SECONDS` | `120` | Flow inactivity timeout in seconds (Java CICFlowMeter default) |
 | `--label TEXT` | `Normal Traffic` | Default attack type label |
+| `--ui` / `--no-ui` | `On` | Enable/disable FastAPI & React SOC Web Dashboard |
+| `--host HOST` | `127.0.0.1` | Dashboard host address |
+| `--port PORT` | `8000` | Dashboard port |
+| `--no-browser` | Off | Do not automatically open browser on startup |
 | `--debug` | Off | Enable verbose debug logging |
 
 #### Live Capture Options
@@ -135,6 +144,36 @@ python main.py [MODE] [OPTIONS]
 | `--filter BPF` | None | Berkeley Packet Filter (e.g. `"tcp port 80"`) |
 | `--count N` | `0` (unlimited) | Max number of packets to capture |
 | `--capture-timeout SECS` | None (forever) | Stop capture after N seconds |
+
+---
+
+## Alert Generation & System Output
+
+Each completed flow is first evaluated as **Normal Traffic** or an **Attack**. For attack predictions, the system assigns a color-coded severity level:
+
+| Attack Category | Severity | Color | Badge | Description |
+|---|---|---|---|---|
+| **DDoS** | **Critical** | Red (`#EF4444`) | `[SEVERITY: CRITICAL]` | Volumetric distributed denial of service |
+| **DoS** | **Critical** | Red (`#EF4444`) | `[SEVERITY: CRITICAL]` | Targeted resource exhaustion denial of service |
+| **Brute Force** | **High** | Orange (`#F97316`) | `[SEVERITY: HIGH]` | Authentication brute-force attempts (SSH, FTP, HTTP) |
+| **Port Scan** | **Medium** | Yellow (`#EAB308`) | `[SEVERITY: MEDIUM]` | Port reconnaissance and host discovery |
+| **Normal Traffic** | **Normal** | Green (`#10B981`) | `[NORMAL]` | Benign host communication |
+
+### Real-Time FastAPI & React SOC Dashboard
+
+When you launch `main.py` with live capture or PCAP processing:
+1. **Instant Browser Launch**: The frontend page at `http://127.0.0.1:8000` opens automatically in your default browser.
+2. **Terminal Kept Live**: The terminal continues running in the background/foreground, displaying real-time flow readings and colorful severity badges.
+3. **Zero-Latency WebSocket Stream**: Every completed flow and threat alert is pushed via WebSocket (`/ws`) to the React dashboard.
+4. **Dashboard Features**:
+   - Color-coded severity indicators with pulse animations for Critical attacks
+   - Real-time threat feed and full flow stream table
+   - Filter tabs: All, Attacks Only, Critical, High, Medium, Normal
+   - Live stream Pause / Resume feed lock
+   - Optional audio alert beeps for Critical and High threats
+   - Flow Detail Modal with class probabilities and feature breakdown
+   - Top attacking source IPs and targeted destination services
+
 
 ---
 
