@@ -63,7 +63,7 @@ logger = logging.getLogger('main')
 # Shared flow completion handler
 # ======================================================================
 
-def is_internal_traffic(src_ip: str, dst_ip: str) -> bool:
+def is_internal_traffic(src_ip: str, dst_ip: str, src_port: Optional[int] = None, dst_port: Optional[int] = None, dashboard_port: Optional[int] = None) -> bool:
     """Return True if this flow is local/infrastructure traffic that should be
     skipped during ML prediction.
 
@@ -113,6 +113,10 @@ def is_internal_traffic(src_ip: str, dst_ip: str) -> bool:
                 return True
         except ValueError:
             pass
+            
+    # Ignore dashboard traffic (FastAPI) to prevent false positives from WebSocket polling
+    if dashboard_port is not None and (src_port == dashboard_port or dst_port == dashboard_port):
+        return True
 
     return False
 
@@ -121,7 +125,8 @@ def handle_completed_flow(flow: Flow,
                           csv_writer: Optional[CSVWriter],
                           predictor: Optional[Predictor],
                           flow_num: int,
-                          portscan_detector: Optional[PortScanDetector] = None) -> None:
+                          portscan_detector: Optional[PortScanDetector] = None,
+                          dashboard_port: Optional[int] = None) -> None:
     """Process a completed flow: write to CSV and/or run prediction.
     
     This function is called for every flow that finishes (via timeout
@@ -143,7 +148,12 @@ def handle_completed_flow(flow: Flow,
     # link-local port scans are counted and alerted on even though the ML
     # model never sees link-local traffic.
     scan_result = None
-    if portscan_detector is not None:
+    
+    # We do NOT run the portscan detector on the dashboard's own traffic, 
+    # to avoid the server getting falsely flagged when responding to browser heartbeats
+    is_dashboard = dashboard_port is not None and (flow.src_port == dashboard_port or flow.dst_port == dashboard_port)
+    
+    if portscan_detector is not None and not is_dashboard:
         is_scan, is_new_episode, unique_ports = portscan_detector.record_and_check(
             src_ip=flow.src_ip,
             dst_ip=flow.dst_ip,
@@ -197,7 +207,7 @@ def handle_completed_flow(flow: Flow,
 
     # Skip internal/infrastructure traffic from ML prediction and normal output.
     # Write to CSV first with final label, then return early.
-    if is_internal_traffic(flow.src_ip, flow.dst_ip):
+    if is_internal_traffic(flow.src_ip, flow.dst_ip, flow.src_port, flow.dst_port, dashboard_port):
         if scan_result is None or not scan_result.get('_scan_new_episode'):
             logger.debug(f"Flow #{flow_num}: suppressing internal traffic "
                          f"({flow.src_ip} -> {flow.dst_ip})")
@@ -292,7 +302,8 @@ def handle_completed_flow(flow: Flow,
 def process_pcap(pcap_file: str, output_file: str,
                  predict: bool = False,
                  timeout: float = FLOW_TIMEOUT_SECONDS,
-                 label: str = "Normal Traffic") -> None:
+                 label: str = "Normal Traffic",
+                 dashboard_port: Optional[int] = None) -> None:
     """Process a PCAP file: extract features, write CSV, optionally predict."""
     print(f"\nProcessing PCAP: {pcap_file}")
     print(f"Output CSV: {output_file}")
@@ -330,13 +341,13 @@ def process_pcap(pcap_file: str, output_file: str,
         timed_out_flows = manager.add_packet(pkt)
         for flow in timed_out_flows:
             flow_num += 1
-            handle_completed_flow(flow, csv_writer, predictor_instance, flow_num)
+            handle_completed_flow(flow, csv_writer, predictor_instance, flow_num, dashboard_port=dashboard_port)
     
     # Flush all remaining active flows
     remaining = manager.flush_all()
     for flow in remaining:
         flow_num += 1
-        handle_completed_flow(flow, csv_writer, predictor_instance, flow_num)
+        handle_completed_flow(flow, csv_writer, predictor_instance, flow_num, dashboard_port=dashboard_port)
     
     csv_writer.close()
     
@@ -361,7 +372,8 @@ def process_live(interface: str,
                  bpf_filter: str = "",
                  packet_count: int = 0,
                  capture_timeout: Optional[float] = None,
-                 timeout: float = FLOW_TIMEOUT_SECONDS) -> None:
+                 timeout: float = FLOW_TIMEOUT_SECONDS,
+                 dashboard_port: Optional[int] = None) -> None:
     """Run live packet capture with real-time flow analysis and prediction.
     
     Architecture:
@@ -439,7 +451,7 @@ def process_live(interface: str,
                         flow_num += 1
                         handle_completed_flow(
                             flow, csv_writer, predictor_instance, flow_num,
-                            portscan_detector
+                            portscan_detector, dashboard_port=dashboard_port
                         )
                     if portscan_detector is not None:
                         portscan_detector.evict_stale()
@@ -463,7 +475,7 @@ def process_live(interface: str,
                 flow_num += 1
                 handle_completed_flow(
                     flow, csv_writer, predictor_instance, flow_num,
-                    portscan_detector
+                    portscan_detector, dashboard_port=dashboard_port
                 )
             
             # Periodic cleanup of timed-out flows
@@ -474,7 +486,7 @@ def process_live(interface: str,
                     flow_num += 1
                     handle_completed_flow(
                         flow, csv_writer, predictor_instance, flow_num,
-                        portscan_detector
+                        portscan_detector, dashboard_port=dashboard_port
                     )
                 if portscan_detector is not None:
                     portscan_detector.evict_stale()
@@ -493,7 +505,7 @@ def process_live(interface: str,
             flow_num += 1
             try:
                 handle_completed_flow(flow, csv_writer, predictor_instance, flow_num,
-                                      portscan_detector)
+                                      portscan_detector, dashboard_port=dashboard_port)
             except KeyboardInterrupt:
                 print("\nFlush interrupted.")
                 break
@@ -623,7 +635,8 @@ Examples:
             bpf_filter=args.filter,
             packet_count=args.count,
             capture_timeout=args.capture_timeout,
-            timeout=args.timeout
+            timeout=args.timeout,
+            dashboard_port=args.port
         )
         return
     
@@ -642,7 +655,8 @@ Examples:
             output_file=args.output,
             predict=args.predict,
             timeout=args.timeout,
-            label=args.label
+            label=args.label,
+            dashboard_port=args.port
         )
         return
     
