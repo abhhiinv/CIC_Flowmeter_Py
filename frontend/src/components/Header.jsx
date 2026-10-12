@@ -38,7 +38,6 @@ export default function Header({
                 LIVE IDS
               </span>
             </h1>
-            <p className="text-xs text-slate-400">Ensemble ML & State-Aware Port Scan Detection</p>
           </div>
         </div>
 
