@@ -68,7 +68,14 @@ CIC_Flowmeter_Py/
 │   ├── pcap_reader.py             # PCAP → PacketInfo parser (IPv4 & IPv6)
 │   ├── portscan_detector.py       # Sliding-window cross-flow port scan detector
 │   ├── csv_writer.py              # Streaming CSV output
+│   ├── alerts.py                  # Threat severity mapping, color schemes & badges
+│   ├── server.py                  # FastAPI server & WebSocket event hub (SPA host)
 │   └── stats_utils.py             # Statistics helper functions
+├── frontend/                      # React + Vite SOC Dashboard (Single Source of Truth)
+│   ├── src/                       # React components, hooks & Tailwind styles
+│   ├── dist/                      # Pre-compiled production bundle (served by FastAPI)
+│   ├── package.json               # Frontend dependencies & scripts
+│   └── vite.config.js             # Vite build configuration
 ├── models/                        # Pre-trained ML artifacts
 │   ├── ensemble_model.pkl         # VotingClassifier (RF + XGBoost)
 │   ├── scaler.pkl                 # RobustScaler (40 features)
@@ -165,7 +172,17 @@ When you launch `main.py` with live capture or PCAP processing:
 1. **Instant Browser Launch**: The frontend page at `http://127.0.0.1:8000` opens automatically in your default browser.
 2. **Terminal Kept Live**: The terminal continues running in the background/foreground, displaying real-time flow readings and colorful severity badges.
 3. **Zero-Latency WebSocket Stream**: Every completed flow and threat alert is pushed via WebSocket (`/ws`) to the React dashboard.
-4. **Dashboard Features**:
+4. **Self-Traffic Suppression**: All HTTP/WebSocket communication between the dashboard server (port `8000`) and the browser is automatically filtered out from ML classification, port scan detection, and CSV output to prevent feedback loops and false alarms.
+5. **Root User & Headless Protection**: When running live capture with `sudo` on Linux, the dashboard automatically detects root execution (`os.geteuid() == 0`) and suppresses browser auto-launch to prevent Chromium sandbox crashes (`Running as root without --no-sandbox is not supported`). Users simply open `http://127.0.0.1:8000` in their regular browser.
+6. **Zero-Config Deployment**: The React frontend is pre-built into `frontend/dist/` and served directly by FastAPI. No Node.js, npm, or frontend build tools are required on machines running the tool.
+7. **Rebuilding the Frontend** (for developers modifying the UI):
+   ```bash
+   cd frontend
+   npm run build
+   # or from project root:
+   npm --prefix frontend run build
+   ```
+8. **Dashboard Features**:
    - Color-coded severity indicators with pulse animations for Critical attacks
    - Real-time threat feed and full flow stream table
    - Filter tabs: All, Attacks Only, Critical, High, Medium, Normal
@@ -335,19 +352,19 @@ The CSV contains **47 columns** — 46 numeric features (always written) + label
 | 16 | `Flow Packets/s` | Flow packet rate |
 | 17–20 | `Flow IAT Mean/Std/Max/Min` | Flow inter-arrival time statistics (μs) |
 | 21–23 | `Fwd IAT Mean/Std/Min` | Forward IAT statistics (μs) |
-| 24–27 | `Bwd IAT Total/Mean/Max/Min` | Backward IAT statistics (μs) |
-| 28–29 | `Fwd/Bwd Header Length` | Sum of TCP/UDP header bytes per direction |
-| 30 | `Bwd Packets/s` | Backward packet rate |
-| 31–35 | `Min/Max Packet Length, Mean/Std/Variance` | Overall packet size statistics |
-| 36–38 | `FIN/PSH/ACK Flag Count` | TCP flag counts (all packets, both directions) |
-| 39–40 | `Init_Win_bytes_forward/backward` | Initial TCP window size per direction |
-| 41 | `act_data_pkt_fwd` | Forward packets carrying payload (payload > 0) |
-| 42 | `min_seg_size_forward` | Minimum TCP header length across forward packets |
-| 43–45 | `Active Mean/Max/Min` | Active burst duration statistics (μs) |
+| 24–28 | `Bwd IAT Total/Mean/Std/Max/Min` | Backward IAT statistics (μs) |
+| 29–30 | `Fwd/Bwd Header Length` | Sum of TCP/UDP header bytes per direction |
+| 31 | `Bwd Packets/s` | Backward packet rate |
+| 32–36 | `Min/Max Packet Length, Mean/Std/Variance` | Overall packet size statistics |
+| 37–40 | `FIN/RST/PSH/ACK Flag Count` | TCP flag counts (all packets, both directions) |
+| 41–42 | `Init_Win_bytes_forward/backward` | Initial TCP window size per direction |
+| 43 | `act_data_pkt_fwd` | Forward packets carrying payload (payload > 0) |
+| 44 | `min_seg_size_forward` | Minimum TCP header length across forward packets |
+| 45 | `Active Max` | Maximum active burst duration (μs) |
 | 46 | `Idle Mean` | Mean idle gap duration (μs) |
 | 47 | `Attack Type` | Classification label |
 
-> **Note:** The ML model consumes 40 of these 46 features. The full 46 are always written to CSV for logging and analysis. See the "ML Model" section below for which features are used.
+> **Note:** The ML model consumes 40 of these 46 numeric features. The full 46 features (+ label) are written to CSV for logging and analysis. See the "ML Model" section below for the exact model feature list.
 
 ---
 
@@ -398,25 +415,25 @@ The model was trained on these 40 features (in this exact order):
 | 18 | Fwd IAT Std |
 | 19 | Fwd IAT Min |
 | 20 | Bwd IAT Total |
-| 21 | Bwd IAT Max |
-| 22 | Bwd IAT Min |
-| 23 | Fwd Header Length |
-| 24 | Bwd Header Length |
-| 25 | Bwd Packets/s |
-| 26 | Min Packet Length |
-| 27 | Max Packet Length |
-| 28 | Packet Length Mean |
-| 29 | Packet Length Std |
-| 30 | FIN Flag Count |
-| 31 | PSH Flag Count |
-| 32 | ACK Flag Count |
-| 33 | Init_Win_bytes_forward |
-| 34 | Init_Win_bytes_backward |
-| 35 | act_data_pkt_fwd |
-| 36 | min_seg_size_forward |
-| 37 | Active Mean |
-| 38 | Active Max |
-| 39 | Active Min |
+| 21 | Bwd IAT Std |
+| 22 | Bwd IAT Max |
+| 23 | Bwd IAT Min |
+| 24 | Fwd Header Length |
+| 25 | Bwd Header Length |
+| 26 | Bwd Packets/s |
+| 27 | Min Packet Length |
+| 28 | Max Packet Length |
+| 29 | Packet Length Mean |
+| 30 | Packet Length Std |
+| 31 | FIN Flag Count |
+| 32 | RST Flag Count |
+| 33 | PSH Flag Count |
+| 34 | ACK Flag Count |
+| 35 | Init_Win_bytes_forward |
+| 36 | Init_Win_bytes_backward |
+| 37 | act_data_pkt_fwd |
+| 38 | min_seg_size_forward |
+| 39 | Active Max |
 | 40 | Idle Mean |
 
 Features written to CSV but **not** fed to the model: `Destination Port`, `Total Length of Bwd Packets`, `Bwd Packet Length Min`, `Fwd IAT Mean`, `Bwd IAT Mean`, `Packet Length Variance`.
@@ -467,7 +484,7 @@ TCP flows use SYN/SYN-ACK detection to assign the client as forward:
 - Non-TCP falls back to first-seen heuristic.
 
 ### Active / Idle periods
-Uses a **5-second** activity timeout (matching CICFlowMeter default). Trailing active bursts (after the last idle gap) are **not** recorded, matching Java behaviour. Flows with no idle gap return `Active Mean = 0`.
+Uses a **5-second** activity timeout (matching CICFlowMeter default). Trailing active bursts (after the last idle gap) are **not** recorded, matching Java behaviour. Flows with no idle gap return `Active Max = 0`.
 
 ### FIN and RST handling
 TCP flows are **terminated on the first FIN packet** (from either direction), matching Java CICFlowMeter behaviour. The trailing ACK/FIN/ACK exchange then forms a new short "appendix" flow — just as in the original tool. This ensures packet counts, IAT values, flag counts, and Active/Idle distributions align with the CICIDS2017 training data.
