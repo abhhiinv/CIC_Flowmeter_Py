@@ -14,7 +14,7 @@ import joblib
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 
-from .config import MODEL_PATH, SCALER_PATH, LABEL_ENCODER_PATH, MODEL_FEATURE_COLUMNS
+from .config import MODEL_PATH, SCALER_PATH, LABEL_ENCODER_PATH, FEATURE_WEIGHTS_PATH, MODEL_FEATURE_COLUMNS
 from .alerts import get_severity, get_terminal_severity_badge
 
 # Suppress sklearn's joblib thread-context warning that appears during live capture
@@ -36,19 +36,22 @@ class Predictor:
     
     def __init__(self, model_path: Optional[str] = None,
                  scaler_path: Optional[str] = None,
-                 label_encoder_path: Optional[str] = None) -> None:
+                 label_encoder_path: Optional[str] = None,
+                 feature_weights_path: Optional[str] = None) -> None:
         self.model_path = Path(model_path) if model_path else MODEL_PATH
         self.scaler_path = Path(scaler_path) if scaler_path else SCALER_PATH
         self.label_encoder_path = Path(label_encoder_path) if label_encoder_path else LABEL_ENCODER_PATH
+        self.feature_weights_path = Path(feature_weights_path) if feature_weights_path else FEATURE_WEIGHTS_PATH
         
         self.model = None
         self.scaler = None
         self.label_encoder = None
+        self._weight_vector = None
         self.feature_columns = MODEL_FEATURE_COLUMNS
         self._loaded = False
     
     def load(self) -> None:
-        """Load the model, scaler, and label encoder from disk.
+        """Load the model, scaler, label encoder, and feature weights from disk.
         
         Call this once before making predictions.
         """
@@ -67,6 +70,26 @@ class Predictor:
         if hasattr(self.scaler, 'feature_names_in_'):
             self.feature_columns = self.scaler.feature_names_in_.tolist()
             logger.info(f"Using {len(self.feature_columns)} features from scaler")
+
+        # Load feature weights if available
+        if self.feature_weights_path and self.feature_weights_path.exists():
+            logger.info(f"Loading feature weights from {self.feature_weights_path}...")
+            fw = joblib.load(str(self.feature_weights_path))
+            if isinstance(fw, dict) and 'names' in fw and 'weights' in fw:
+                weight_map = dict(zip(fw['names'], fw['weights']))
+                self._weight_vector = np.array([
+                    weight_map.get(c, 1.0) for c in self.feature_columns
+                ], dtype=np.float64)
+            elif isinstance(fw, dict):
+                self._weight_vector = np.array([
+                    fw.get(c, 1.0) for c in self.feature_columns
+                ], dtype=np.float64)
+            else:
+                self._weight_vector = np.array(fw, dtype=np.float64)
+            logger.info(f"Loaded {len(self._weight_vector)} feature weights.")
+        else:
+            logger.info("No feature weights file found; proceeding with unweighted features.")
+            self._weight_vector = None
         
         # Force single-threaded execution on all sub-estimators.
         # The VotingClassifier wraps RandomForest/XGBoost which default to
@@ -130,6 +153,8 @@ class Predictor:
         # Scale features — pass DataFrame (not .values) so column names match
         # what the scaler was fitted on, silencing the feature_names_in_ warning.
         scaled = self.scaler.transform(df)
+        if self._weight_vector is not None:
+            scaled = scaled * self._weight_vector
         
         return scaled
     
@@ -211,6 +236,8 @@ class Predictor:
         
         # Scale — pass DataFrame so column names match the fitted scaler
         scaled = self.scaler.transform(df)
+        if self._weight_vector is not None:
+            scaled = scaled * self._weight_vector
         
         # Predict
         predictions_encoded = self.model.predict(scaled)

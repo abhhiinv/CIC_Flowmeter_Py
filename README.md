@@ -79,7 +79,8 @@ CIC_Flowmeter_Py/
 ├── models/                        # Pre-trained ML artifacts
 │   ├── ensemble_model.pkl         # VotingClassifier (RF + XGBoost)
 │   ├── scaler.pkl                 # RobustScaler (40 features)
-│   └── label_encoder.pkl          # LabelEncoder (5 classes)
+│   ├── label_encoder.pkl          # LabelEncoder (5 classes)
+│   └── feature_weights.pkl        # Multi-class feature weighting vector (40 features)
 ├── cicflowmeter_converter.py      # Standalone PCAP-to-CSV converter
 ├── validate.py                    # Feature validation script
 └── PROGRESS.md                    # Detailed change log & roadmap

@@ -14,6 +14,7 @@ MODEL_DIR = BASE_DIR / "models"
 MODEL_PATH = MODEL_DIR / "ensemble_model.pkl"
 SCALER_PATH = MODEL_DIR / "scaler.pkl"
 LABEL_ENCODER_PATH = MODEL_DIR / "label_encoder.pkl"
+FEATURE_WEIGHTS_PATH = MODEL_DIR / "feature_weights.pkl"
 
 # ── Flow settings ────────────────────────────────────────────────────────
 FLOW_TIMEOUT_SECONDS = 120.0         # Inactivity timeout before flow expires (Java CICFlowMeter default)
