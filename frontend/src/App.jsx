@@ -31,7 +31,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-soc-950 text-slate-100">
+    <div className="flex flex-col min-h-screen bg-[#0a0a0a] text-[#ffffff] font-mono">
       {/* 1. Header */}
       <Header
         connected={connected}
@@ -50,12 +50,12 @@ export default function App() {
       />
 
       {/* Main Content Dashboard */}
-      <main className="flex-1 p-6 space-y-6 max-w-[1700px] w-full mx-auto">
+      <main className="flex-1 p-4 sm:p-5 space-y-4 max-w-[1700px] w-full mx-auto">
         {/* 3. Stat Cards */}
         <StatCards stats={stats} />
 
         {/* 4. Two-Column Threat Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Left: Recent Attack Alert Feed (2/3 width) */}
           <div className="lg:col-span-2">
             <AlertFeed alerts={alerts} onSelectFlow={setSelectedFlow} />

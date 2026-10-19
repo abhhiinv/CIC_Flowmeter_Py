@@ -11,25 +11,25 @@ export default function SeverityPanel({ stats }) {
   };
 
   return (
-    <div className="bg-soc-900 border border-soc-700 rounded-xl p-5 flex flex-col justify-between h-full">
+    <div className="bg-[#1a1a1a] border border-[#2a2a2a] p-4 flex flex-col justify-between h-full font-mono text-xs">
       <div>
-        <h2 className="text-sm font-bold tracking-wide text-white uppercase pb-3 border-b border-soc-700 flex items-center justify-between">
-          <span>Severity Hierarchy</span>
-          <span className="text-xs text-slate-400 font-normal">Classification Matrix</span>
+        <h2 className="text-xs font-bold tracking-wider text-[#ffffff] uppercase pb-2.5 border-b border-[#2a2a2a] flex items-center justify-between">
+          <span>[ SEVERITY MATRIX ]</span>
+          <span className="text-[11px] text-[#888888] font-normal">CLASSIFICATION</span>
         </h2>
 
-        <div className="mt-4 space-y-3.5">
+        <div className="mt-3.5 space-y-3">
           {/* Critical */}
           <div>
-            <div className="flex items-center justify-between text-xs mb-1 font-mono">
+            <div className="flex items-center justify-between mb-1">
               <span className="text-red-400 font-bold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-red-500" /> CRITICAL: DDoS / DoS
+                <span className="w-1.5 h-1.5 bg-red-500" /> CRITICAL: DDoS / DoS
               </span>
-              <span className="text-red-300 font-bold">{severityCounts.Critical || 0}</span>
+              <span className="text-red-400 font-bold">{severityCounts.Critical || 0}</span>
             </div>
-            <div className="w-full bg-soc-800 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-[#0a0a0a] border border-[#2a2a2a] h-2 overflow-hidden">
               <div
-                className="bg-red-500 h-2 rounded-full transition-all duration-500"
+                className="bg-red-500 h-full transition-all duration-300"
                 style={{ width: `${getPercent(severityCounts.Critical || 0)}%` }}
               />
             </div>
@@ -37,15 +37,15 @@ export default function SeverityPanel({ stats }) {
 
           {/* High */}
           <div>
-            <div className="flex items-center justify-between text-xs mb-1 font-mono">
+            <div className="flex items-center justify-between mb-1">
               <span className="text-orange-400 font-bold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-orange-500" /> HIGH: Brute Force
+                <span className="w-1.5 h-1.5 bg-orange-500" /> HIGH: Brute Force
               </span>
-              <span className="text-orange-300 font-bold">{severityCounts.High || 0}</span>
+              <span className="text-orange-400 font-bold">{severityCounts.High || 0}</span>
             </div>
-            <div className="w-full bg-soc-800 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-[#0a0a0a] border border-[#2a2a2a] h-2 overflow-hidden">
               <div
-                className="bg-orange-500 h-2 rounded-full transition-all duration-500"
+                className="bg-orange-500 h-full transition-all duration-300"
                 style={{ width: `${getPercent(severityCounts.High || 0)}%` }}
               />
             </div>
@@ -53,15 +53,15 @@ export default function SeverityPanel({ stats }) {
 
           {/* Medium */}
           <div>
-            <div className="flex items-center justify-between text-xs mb-1 font-mono">
+            <div className="flex items-center justify-between mb-1">
               <span className="text-yellow-400 font-bold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-yellow-500" /> MEDIUM: Port Scan
+                <span className="w-1.5 h-1.5 bg-yellow-500" /> MEDIUM: Port Scan
               </span>
-              <span className="text-yellow-300 font-bold">{severityCounts.Medium || 0}</span>
+              <span className="text-yellow-400 font-bold">{severityCounts.Medium || 0}</span>
             </div>
-            <div className="w-full bg-soc-800 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-[#0a0a0a] border border-[#2a2a2a] h-2 overflow-hidden">
               <div
-                className="bg-yellow-500 h-2 rounded-full transition-all duration-500"
+                className="bg-yellow-500 h-full transition-all duration-300"
                 style={{ width: `${getPercent(severityCounts.Medium || 0)}%` }}
               />
             </div>
@@ -69,15 +69,15 @@ export default function SeverityPanel({ stats }) {
 
           {/* Normal */}
           <div>
-            <div className="flex items-center justify-between text-xs mb-1 font-mono">
-              <span className="text-emerald-400 font-bold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" /> NORMAL: Normal Traffic
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[#00c853] font-bold flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 bg-[#00c853]" /> NORMAL: Benign Traffic
               </span>
-              <span className="text-emerald-300 font-bold">{severityCounts.Normal || 0}</span>
+              <span className="text-[#00c853] font-bold">{severityCounts.Normal || 0}</span>
             </div>
-            <div className="w-full bg-soc-800 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-[#0a0a0a] border border-[#2a2a2a] h-2 overflow-hidden">
               <div
-                className="bg-emerald-500 h-2 rounded-full transition-all duration-500"
+                className="bg-[#00c853] h-full transition-all duration-300"
                 style={{ width: `${getPercent(severityCounts.Normal || 0)}%` }}
               />
             </div>
@@ -86,17 +86,19 @@ export default function SeverityPanel({ stats }) {
       </div>
 
       {/* Top Attack Sources */}
-      <div className="mt-5 pt-4 border-t border-soc-700/80">
-        <h3 className="text-xs font-bold uppercase text-slate-300 tracking-wider mb-2">Top Attack Sources</h3>
+      <div className="mt-4 pt-3 border-t border-[#2a2a2a]">
+        <h3 className="text-[11px] font-bold uppercase text-[#888888] tracking-wider mb-2">
+          [ TOP ATTACK SOURCES ]
+        </h3>
         {Object.keys(topAttackers).length === 0 ? (
-          <div className="text-[11px] text-slate-500 font-mono">No attacking hosts recorded yet</div>
+          <div className="text-[11px] text-[#888888]">No attacking hosts recorded yet</div>
         ) : (
-          <div className="space-y-1.5 font-mono text-xs">
+          <div className="space-y-1">
             {Object.entries(topAttackers).slice(0, 5).map(([ip, count]) => (
-              <div key={ip} className="flex justify-between items-center py-0.5">
-                <span className="text-rose-400 font-medium">{ip}</span>
-                <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 text-[11px] border border-rose-500/30">
-                  {count} attack{count > 1 ? 's' : ''}
+              <div key={ip} className="flex justify-between items-center py-0.5 border-b border-[#2a2a2a]/40 last:border-0">
+                <span className="text-[#ffffff] font-medium">{ip}</span>
+                <span className="px-1.5 py-0.2 border border-red-500/40 bg-[#0a0a0a] text-red-400 text-[10px]">
+                  {count} hit{count > 1 ? 's' : ''}
                 </span>
               </div>
             ))}

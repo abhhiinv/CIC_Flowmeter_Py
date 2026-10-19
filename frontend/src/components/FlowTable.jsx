@@ -37,34 +37,36 @@ export default function FlowTable({ flows, onSelectFlow }) {
   };
 
   return (
-    <div className="bg-soc-900 border border-soc-700 rounded-xl overflow-hidden flex flex-col">
+    <div className="bg-[#1a1a1a] border border-[#2a2a2a] flex flex-col font-mono text-xs">
       {/* Table Toolbar */}
-      <div className="p-4 border-b border-soc-700 flex flex-wrap items-center justify-between gap-4 bg-soc-850/60">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-bold tracking-wide text-white uppercase">Live Flow Stream</h2>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-soc-700 text-slate-300 font-mono">
-            Showing {filteredFlows.length} of {flows.length} buffered
+      <div className="p-3 border-b border-[#2a2a2a] flex flex-wrap items-center justify-between gap-3 bg-[#151515]">
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-xs font-bold tracking-wider text-[#ffffff] uppercase">
+            [ LIVE FLOW STREAM ]
+          </h2>
+          <span className="text-[11px] text-[#888888]">
+            BUFFER: <span className="text-[#ffffff]">{filteredFlows.length}</span> / {flows.length}
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Filter tabs */}
-          <div className="flex bg-soc-950 p-1 rounded-lg border border-soc-800 text-xs font-medium">
+          <div className="flex bg-[#0a0a0a] border border-[#2a2a2a] text-xs">
             {[
-              { id: 'ALL', label: 'All' },
-              { id: 'ATTACKS_ONLY', label: 'Attacks Only' },
-              { id: 'CRITICAL', label: 'Critical' },
-              { id: 'HIGH', label: 'High' },
-              { id: 'MEDIUM', label: 'Medium' },
-              { id: 'NORMAL', label: 'Normal' },
+              { id: 'ALL', label: 'ALL' },
+              { id: 'ATTACKS_ONLY', label: 'ATTACKS ONLY' },
+              { id: 'CRITICAL', label: 'CRITICAL' },
+              { id: 'HIGH', label: 'HIGH' },
+              { id: 'MEDIUM', label: 'MEDIUM' },
+              { id: 'NORMAL', label: 'NORMAL' },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setFilterSeverity(tab.id)}
-                className={`px-2.5 py-1 rounded transition text-xs ${
+                className={`px-2 py-1 transition text-xs border-r border-[#2a2a2a] last:border-r-0 ${
                   filterSeverity === tab.id
-                    ? 'bg-soc-800 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-[#2a2a2a] text-[#ffffff] font-bold'
+                    : 'text-[#888888] hover:text-[#ffffff]'
                 }`}
               >
                 {tab.label}
@@ -76,52 +78,37 @@ export default function FlowTable({ flows, onSelectFlow }) {
           <div className="relative">
             <input
               type="text"
-              placeholder="Filter IP / Port / Attack..."
+              placeholder="> filter IP / port / attack..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-soc-950 border border-soc-700 text-slate-200 text-xs rounded-lg px-3 py-1.5 pl-8 focus:outline-none focus:border-rose-500 font-mono placeholder:text-slate-600 w-56"
+              className="bg-[#0a0a0a] border border-[#2a2a2a] text-[#ffffff] text-xs px-2.5 py-1 focus:outline-none focus:border-[#00c853] placeholder:text-[#888888] w-56"
             />
-            <svg
-              width="14"
-              height="14"
-              className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
           </div>
         </div>
       </div>
 
       {/* Table Content */}
       <div className="overflow-x-auto max-h-[520px]">
-        <table className="w-full text-left border-collapse text-xs font-mono">
+        <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="bg-soc-950/70 border-b border-soc-700 text-slate-400 uppercase text-[11px] tracking-wider sticky top-0 z-20 backdrop-blur">
-              <th className="py-2.5 px-4 font-semibold">Flow #</th>
-              <th className="py-2.5 px-4 font-semibold">Timestamp</th>
-              <th className="py-2.5 px-4 font-semibold">Source</th>
-              <th className="py-2.5 px-4 font-semibold">Destination</th>
-              <th className="py-2.5 px-4 font-semibold">Proto</th>
-              <th className="py-2.5 px-4 font-semibold">Packets</th>
-              <th className="py-2.5 px-4 font-semibold">Duration</th>
-              <th className="py-2.5 px-4 font-semibold">Classification</th>
-              <th className="py-2.5 px-4 font-semibold">Severity</th>
-              <th className="py-2.5 px-4 font-semibold">Confidence</th>
+            <tr className="bg-[#0a0a0a] border-b border-[#2a2a2a] text-[#888888] uppercase text-[10px] tracking-wider sticky top-0 z-20">
+              <th className="py-2 px-3 font-bold border-r border-[#2a2a2a]/40">#</th>
+              <th className="py-2 px-3 font-bold border-r border-[#2a2a2a]/40">TIME</th>
+              <th className="py-2 px-3 font-bold border-r border-[#2a2a2a]/40">SOURCE</th>
+              <th className="py-2 px-3 font-bold border-r border-[#2a2a2a]/40">DESTINATION</th>
+              <th className="py-2 px-3 font-bold border-r border-[#2a2a2a]/40">PROTO</th>
+              <th className="py-2 px-3 font-bold border-r border-[#2a2a2a]/40">PKTS</th>
+              <th className="py-2 px-3 font-bold border-r border-[#2a2a2a]/40">DURATION</th>
+              <th className="py-2 px-3 font-bold border-r border-[#2a2a2a]/40">CLASSIFICATION</th>
+              <th className="py-2 px-3 font-bold border-r border-[#2a2a2a]/40">SEVERITY</th>
+              <th className="py-2 px-3 font-bold">CONF</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-soc-800">
+          <tbody className="divide-y divide-[#2a2a2a]/60">
             {filteredFlows.length === 0 ? (
               <tr>
-                <td colSpan="10" className="py-12 text-center text-slate-500 text-xs">
-                  No matching network flows available.
+                <td colSpan="10" className="py-10 text-center text-[#888888] text-xs">
+                  [ -- NO MATCHING FLOWS BUFFERED -- ]
                 </td>
               </tr>
             ) : (
@@ -133,36 +120,36 @@ export default function FlowTable({ flows, onSelectFlow }) {
                   <tr
                     key={`flow-${flow.id}-${flow.epoch || flow.timestamp}`}
                     onClick={() => onSelectFlow(flow)}
-                    className={`hover:bg-soc-800/80 transition cursor-pointer ${
+                    className={`hover:bg-[#151515] transition cursor-pointer ${
                       flow.severity === 'Critical' ? 'bg-red-950/20' : ''
                     }`}
                   >
-                    <td className="py-2.5 px-4 text-slate-400 font-bold">#{flow.id}</td>
-                    <td className="py-2.5 px-4 text-slate-300">{timeStr}</td>
-                    <td className="py-2.5 px-4 text-rose-300">
+                    <td className="py-1.5 px-3 text-[#888888] font-bold border-r border-[#2a2a2a]/30">#{flow.id}</td>
+                    <td className="py-1.5 px-3 text-[#888888] border-r border-[#2a2a2a]/30">{timeStr}</td>
+                    <td className="py-1.5 px-3 text-[#ffffff] border-r border-[#2a2a2a]/30">
                       {flow.src_ip}:{flow.src_port}
                     </td>
-                    <td className="py-2.5 px-4 text-slate-300">
+                    <td className="py-1.5 px-3 text-[#ffffff] border-r border-[#2a2a2a]/30">
                       {flow.dst_ip}:{flow.dst_port}
                     </td>
-                    <td className="py-2.5 px-4 text-slate-400 uppercase">{flow.protocol}</td>
-                    <td className="py-2.5 px-4 text-slate-300">{flow.packet_count}</td>
-                    <td className="py-2.5 px-4 text-slate-400">
+                    <td className="py-1.5 px-3 text-[#888888] uppercase border-r border-[#2a2a2a]/30">{flow.protocol}</td>
+                    <td className="py-1.5 px-3 text-[#ffffff] border-r border-[#2a2a2a]/30">{flow.packet_count}</td>
+                    <td className="py-1.5 px-3 text-[#888888] border-r border-[#2a2a2a]/30">
                       {formatDuration(flow.duration_us)}
                     </td>
-                    <td className="py-2.5 px-4">
-                      <span className={`font-semibold ${cfg.textClass}`}>{flow.label}</span>
+                    <td className="py-1.5 px-3 border-r border-[#2a2a2a]/30">
+                      <span className={`font-bold ${cfg.textClass}`}>{flow.label}</span>
                     </td>
-                    <td className="py-2.5 px-4">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider ${cfg.bgBadge}`}>
-                        {cfg.label}
+                    <td className="py-1.5 px-3 border-r border-[#2a2a2a]/30">
+                      <span className={`px-1.5 py-0.2 text-[10px] font-bold tracking-wider ${cfg.bgBadge}`}>
+                        [{cfg.label}]
                       </span>
                     </td>
-                    <td className="py-2.5 px-4 text-slate-300">
+                    <td className="py-1.5 px-3 text-[#888888]">
                       {flow.confidence !== null && flow.confidence !== undefined ? (
                         `${(flow.confidence * 100).toFixed(1)}%`
                       ) : (
-                        <span className="text-slate-600">-</span>
+                        <span>-</span>
                       )}
                     </td>
                   </tr>
